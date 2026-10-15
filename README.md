@@ -1,18 +1,20 @@
-# Draw Pixels
+# Defold Pixels
 
-[![Build Status](https://github.com/AGulev/drawpixels/workflows/Build%20with%20bob/badge.svg)](https://github.com/AGulev/drawpixels/actions)
+[![Build Status](https://github.com/king8fisher/defold-pixels/actions/workflows/bob.yml/badge.svg)](https://github.com/king8fisher/defold-pixels/actions/workflows/bob.yml)
 
 ![15f0e5a685b5c7f16ef78f612c377e4cab08ce8a](https://github.com/user-attachments/assets/4c9d1ead-74e2-4675-ab51-a9ddf63c15da)
 
 [Defold engine](http://www.defold.com) native extension for drawing pixels and simple geometry into texture buffer.
 
+Based on [drawpixels](https://github.com/AGulev/drawpixels) by Alexey Gulev, released under the MIT license. The Lua module is named `pixels` instead of `drawpixels`.
+
 Feel free to contribute!
 
 >Please, pay attension!
-The size of the image you manipulate with DrawPixels must match that of the atlas, not the sprite image. Otherwise you need to know where the sprite is the atlas and update that region of the atlas.
+The size of the image you manipulate with Defold Pixels must match that of the atlas, not the sprite image. Otherwise you need to know where the sprite is the atlas and update that region of the atlas.
 
 ## Installation
-To use this library in your Defold project, add the needed version URL to your `game.project` dependencies from [Releases](https://github.com/AGulev/drawpixels/releases)
+To use this library in your Defold project, add the needed version URL to your `game.project` dependencies from [Releases](https://github.com/king8fisher/defold-pixels/releases)
 
 <img width="401" alt="image" src="https://user-images.githubusercontent.com/2209596/202223571-c77f0304-5202-4314-869d-7a90bbeec5ec.png">
 
@@ -20,7 +22,7 @@ To use this library in your Defold project, add the needed version URL to your `
 ## Example
 ![screenshot](https://user-images.githubusercontent.com/2209596/45321616-7f24e100-b54e-11e8-9821-00b1b2e36a97.jpg)
 
-Main code example is [here](https://github.com/AGulev/drawpixels/blob/master/example/canvas.script)
+Main code example is [here](example/canvas.script)
 
 ## Lua API
 First of all you need to create a table with a buffer information that contain next fields:
@@ -48,7 +50,7 @@ local buffer_info = {
 ```
 Then when you have a buffer info, you can use next methods:
 
-#### drawpixels.circle(buffer_info, pox_x, pox_y, diameter, red, green, blue, alpha, antialiasing, width)
+#### pixels.circle(buffer_info, pox_x, pox_y, diameter, red, green, blue, alpha, antialiasing, width)
 Method for drawing circle:
 
 `buffer_info` - buffer information<br />
@@ -62,7 +64,7 @@ Method for drawing circle:
 `antialiasing` - adds anti-aliasing. Only for 4 channels. Optional parameter.<br />
 `width` - indicates the circle width. Only for circle with anti-aliasing. Optional parameter.<br />
 
-#### drawpixels.filled_circle(buffer_info, pos_x, pos_y, diameter, red, green, blue, alpha, antialiasing)
+#### pixels.filled_circle(buffer_info, pos_x, pos_y, diameter, red, green, blue, alpha, antialiasing)
 Method for drawing filled circle:
 
 `buffer_info` - buffer information<br />
@@ -75,7 +77,7 @@ Method for drawing filled circle:
 `alpha` - alpha channel 0..255. Optional parameter for rgba textures<br />
 `antialiasing` - adds anti-aliasing. Only for 4 channels. Optional parameter.<br />
 
-#### drawpixels.rect(buffer_info, pos_x, pos_y, rect_width, rect_height, red, green, blue, alpha)
+#### pixels.rect(buffer_info, pos_x, pos_y, rect_width, rect_height, red, green, blue, alpha)
 Method for drawing rectangle:
 
 `buffer_info` - buffer information<br />
@@ -88,7 +90,7 @@ Method for drawing rectangle:
 `blue` - blue channel of the color 0..255<br />
 `alpha` - alpha channel 0..255. Optional parameter for rgba textures<br />
 
-#### drawpixels.filled_rect(buffer_info, pos_x, pos_y, rect_width, rect_height, red, green, blue, alpha, angle)
+#### pixels.filled_rect(buffer_info, pos_x, pos_y, rect_width, rect_height, red, green, blue, alpha, angle)
 Method for drawing filled rectangle:
 
 `buffer_info` - buffer information<br />
@@ -102,7 +104,7 @@ Method for drawing filled rectangle:
 `alpha` - alpha channel 0..255. Optional parameter for rgba textures<br />
 `angle` - rotation angle in degrees. Optional.<br />
 
-#### drawpixels.fill(buffer_info, red, green, blue, alpha)
+#### pixels.fill(buffer_info, red, green, blue, alpha)
 Fill buffer with the color:
 
 `buffer_info` - buffer information<br />
@@ -111,7 +113,7 @@ Fill buffer with the color:
 `blue` - blue channel of the color 0..255<br />
 `alpha` - alpha channel 0..255. Optional parameter for rgba textures<br />
 
-#### drawpixels.line(buffer_info, x0, y0, x1, y1, red, green, blue, alpha, antialiasing, width)
+#### pixels.line(buffer_info, x0, y0, x1, y1, red, green, blue, alpha, antialiasing, width)
 Draw a line between two points:
 
 `buffer_info` - buffer information<br />
@@ -126,7 +128,7 @@ Draw a line between two points:
 `antialiasing` - adds anti-aliasing. Only for 4 channels. Optional parameter.<br />
 `width` - indicates the line width. Only for line with anti-aliasing. Optional parameter.<br />
 
-#### drawpixels.gradient_line(buffer_info, x0, y0, x1, y1, red1, green1, blue1, red2, green2, blue2, alpha, antialiasing, width)
+#### pixels.gradient_line(buffer_info, x0, y0, x1, y1, red1, green1, blue1, red2, green2, blue2, alpha, antialiasing, width)
 Draw a gradient line between two points:
 
 `buffer_info` - buffer information<br />
@@ -144,7 +146,7 @@ Draw a gradient line between two points:
 `antialiasing` - adds anti-aliasing. Only for 4 channels. Optional parameter.<br />
 `width` - indicates the line width. Only for line with anti-aliasing. Optional parameter.<br />
 
-#### drawpixels.arc(buffer_info, x, y, radius, from, to, red, green, blue, alpha)
+#### pixels.arc(buffer_info, x, y, radius, from, to, red, green, blue, alpha)
 Draw a arc between two corners. If from < to the arc is drawn counterclockwise. If from > to the arc is drawn clockwise. Only for 4 channels:
 
 `buffer_info` - buffer information<br />
@@ -158,7 +160,7 @@ Draw a arc between two corners. If from < to the arc is drawn counterclockwise. 
 `blue` - blue channel of the color 0..255<br />
 `alpha` - alpha channel 0..255<br />
 
-#### drawpixels.filled_arc(buffer_info, x, y, radius, from, to, red, green, blue, alpha)
+#### pixels.filled_arc(buffer_info, x, y, radius, from, to, red, green, blue, alpha)
 Draw a filled arc between two corners. If from < to the arc is drawn counterclockwise. If from > to the arc is drawn clockwise. Only for 4 channels:
 
 `buffer_info` - buffer information<br />
@@ -172,7 +174,7 @@ Draw a filled arc between two corners. If from < to the arc is drawn countercloc
 `blue` - blue channel of the color 0..255<br />
 `alpha` - alpha channel 0..255<br />
 
-#### drawpixels.gradient_arc(buffer_info, x, y, radius, from, to, red1, green1, blue1, red2, green2, blue2, alpha)
+#### pixels.gradient_arc(buffer_info, x, y, radius, from, to, red1, green1, blue1, red2, green2, blue2, alpha)
 Draw a gradient arc between two corners. If from < to the arc is drawn counterclockwise. If from > to the arc is drawn clockwise. Only for 4 channels:
 
 `buffer_info` - buffer information<br />
@@ -189,7 +191,7 @@ Draw a gradient arc between two corners. If from < to the arc is drawn countercl
 `blue2` - second blue channel of the color 0..255<br />
 `alpha` - alpha channel 0..255<br />
 
-#### drawpixels.pixel(buffer_info, x, y, red, green, blue, alpha)
+#### pixels.pixel(buffer_info, x, y, red, green, blue, alpha)
 Draw a pixel:
 
 `buffer_info` - buffer information<br />
@@ -200,7 +202,7 @@ Draw a pixel:
 `blue` - blue channel of the color 0..255<br />
 `alpha` - alpha channel 0..255. Optional parameter for rgba textures<br />
 
-#### drawpixels.color(buffer_info, x, y)
+#### pixels.color(buffer_info, x, y)
 Read color from a position in the buffer:
 
 `buffer_info` - buffer information<br />
@@ -214,7 +216,7 @@ RETURNS:
 `blue` - blue channel of the color 0..255<br />
 `alpha` - alpha channel 0..255. Optional parameter for rgba textures<br />
 
-#### drawpixels.bezier(buffer_info, x0, y0, xc, yc, x1, y1, red, green, blue, alpha)
+#### pixels.bezier(buffer_info, x0, y0, xc, yc, x1, y1, red, green, blue, alpha)
 Draw a bezier line between two points and one control point:
 
 `buffer_info` - buffer information<br />
@@ -231,13 +233,13 @@ Draw a bezier line between two points and one control point:
 
 You can fill in a specific area. To do this, you need to identify the borders with `start_fill` method and call the `fill_area` method to fill the area. Borders work with: lines, gradient lines, circles, filled circles with anti-aliasing, pixels, arcs. <b>NOT WORK WITH FILLED ARCS AND GRADIENT ARCS.</b> The arcs themselves use this method, so the fill may not be predictable. Do not create arcs until you are done with the fill. Be sure to call the `end_fill` method when you stop working with the fill.
 
-#### drawpixels.start_fill()
+#### pixels.start_fill()
 Indicates the start of border preservation.
 
-#### drawpixels.end_fill()
+#### pixels.end_fill()
 Indicates the stop of border preservation.
 
-#### drawpixels.fill_area(buffer_info, x, y, red, green, blue, alpha)
+#### pixels.fill_area(buffer_info, x, y, red, green, blue, alpha)
 Fills an area at specified boundaries. Only for 4 channels:
 
 `buffer_info` - buffer information<br />

@@ -1,6 +1,6 @@
-- name: drawpixels
+- name: pixels
   type: table
-  desc: Functions and constants for interacting with DrawPixels extension
+  desc: Functions and constants for interacting with Defold Pixels extension
 
   members:
 

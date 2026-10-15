@@ -1,6 +1,6 @@
 // Extension lib defines
-#define LIB_NAME "DrawPixels"
-#define MODULE_NAME "drawpixels"
+#define LIB_NAME "DefoldPixels"
+#define MODULE_NAME "pixels"
 #ifndef DLIB_LOG_DOMAIN
 #define DLIB_LOG_DOMAIN LIB_NAME
 #endif
@@ -2253,26 +2253,26 @@ static void LuaInit(lua_State *L)
     assert(top == lua_gettop(L));
 }
 
-dmExtension::Result AppInitializeDrawPixelsExtension(dmExtension::AppParams *params)
+dmExtension::Result AppInitializeDefoldPixelsExtension(dmExtension::AppParams *params)
 {
     return dmExtension::RESULT_OK;
 }
 
-dmExtension::Result InitializeDrawPixelsExtension(dmExtension::Params *params)
+dmExtension::Result InitializeDefoldPixelsExtension(dmExtension::Params *params)
 {
     LuaInit(params->m_L);
     printf("Registered %s Extension\n", MODULE_NAME);
     return dmExtension::RESULT_OK;
 }
 
-dmExtension::Result AppFinalizeDrawPixelsExtension(dmExtension::AppParams *params)
+dmExtension::Result AppFinalizeDefoldPixelsExtension(dmExtension::AppParams *params)
 {
     return dmExtension::RESULT_OK;
 }
 
-dmExtension::Result FinalizeDrawPixelsExtension(dmExtension::Params *params)
+dmExtension::Result FinalizeDefoldPixelsExtension(dmExtension::Params *params)
 {
     return dmExtension::RESULT_OK;
 }
 
-DM_DECLARE_EXTENSION(DrawPixels, LIB_NAME, AppInitializeDrawPixelsExtension, AppFinalizeDrawPixelsExtension, InitializeDrawPixelsExtension, 0, 0, FinalizeDrawPixelsExtension)
+DM_DECLARE_EXTENSION(DefoldPixels, LIB_NAME, AppInitializeDefoldPixelsExtension, AppFinalizeDefoldPixelsExtension, InitializeDefoldPixelsExtension, 0, 0, FinalizeDefoldPixelsExtension)

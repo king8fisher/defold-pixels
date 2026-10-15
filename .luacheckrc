@@ -43,5 +43,5 @@ globals = {
   "defreview",
   "resource",
   "buffer",
-  "drawpixels"
+  "pixels"
 }

@@ -16,13 +16,13 @@ function init(self)
   }
 
   self.header = {width = width, height = height, type = graphics.TEXTURE_TYPE_2D, format = graphics.TEXTURE_FORMAT_RGBA, num_mip_maps = 1}
-  drawpixels.fill(self.buffer_info, 0, 0, 0, 0)
+  pixels.fill(self.buffer_info, 0, 0, 0, 0)
 
-  drawpixels.gradient_line(self.buffer_info, width * 0.2, width * 0.1, width * 0.9, width * 0.9, 255, 0, 0, 0, 0, 255, 255, true, 12)
-  drawpixels.line(self.buffer_info, width * 0.2, width * 0.5, width * 0.9, width * 0.9, 0, 0, 255, 255, true, 5)
-  drawpixels.line(self.buffer_info, width * 0.1, width * 0.5, width * 0.9, width * 0.5, 255, 0, 0, 255, true, 3)
-  drawpixels.line(self.buffer_info, width * 0.5, width * 0.1, width * 0.5, width * 0.9, 0, 0, 255, 255, true, 10)
-  drawpixels.gradient_line(self.buffer_info, width * 0.5, width * 0.1, width * 0.5, width * 0.9, 255, 0, 0, 0, 0, 255, 255, true, 2)
+  pixels.gradient_line(self.buffer_info, width * 0.2, width * 0.1, width * 0.9, width * 0.9, 255, 0, 0, 0, 0, 255, 255, true, 12)
+  pixels.line(self.buffer_info, width * 0.2, width * 0.5, width * 0.9, width * 0.9, 0, 0, 255, 255, true, 5)
+  pixels.line(self.buffer_info, width * 0.1, width * 0.5, width * 0.9, width * 0.5, 255, 0, 0, 255, true, 3)
+  pixels.line(self.buffer_info, width * 0.5, width * 0.1, width * 0.5, width * 0.9, 0, 0, 255, 255, true, 10)
+  pixels.gradient_line(self.buffer_info, width * 0.5, width * 0.1, width * 0.5, width * 0.9, 255, 0, 0, 0, 0, 255, 255, true, 2)
 
   resource.set_texture(self.resource_path, self.header, self.buffer_info.buffer)
 end

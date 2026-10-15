@@ -1,4 +1,4 @@
-name: "DrawPixels"
+name: "DefoldPixels"
 
 platforms:
     x86_64-linux:

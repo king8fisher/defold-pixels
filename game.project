@@ -1,5 +1,5 @@
 [project]
-title = drawpixels
+title = defold-pixels
 version = 0.5
 
 [bootstrap]
@@ -23,5 +23,5 @@ shared_state = 1
 texture_profiles = /builtins/graphics/default.texture_profiles
 
 [library]
-include_dirs = drawpixels
+include_dirs = defold-pixels
 

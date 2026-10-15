@@ -15,16 +15,16 @@ function init(self)
   }
 
   self.header = {width = width, height = height, type = graphics.TEXTURE_TYPE_2D, format = graphics.TEXTURE_FORMAT_RGBA, num_mip_maps = 1}
-  drawpixels.fill(self.buffer_info, 255, 255, 0, 255)
+  pixels.fill(self.buffer_info, 255, 255, 0, 255)
 
   local step = 30;
   for angle = 0, 330 - step, step do
-    -- drawpixels.gradient_arc(self.buffer_info, width/2, width/2,  width * 0.4, (angle) * math.pi / 180, (angle + step) * math.pi / 180, 120, 150, 48, 50, 180, 200, 255)
-    drawpixels.filled_arc(self.buffer_info, width / 2, width / 2, width * 0.4, (angle) * math.pi / 180, (angle + step) * math.pi / 180, 255, 0, 0,
+    -- pixels.gradient_arc(self.buffer_info, width/2, width/2,  width * 0.4, (angle) * math.pi / 180, (angle + step) * math.pi / 180, 120, 150, 48, 50, 180, 200, 255)
+    pixels.filled_arc(self.buffer_info, width / 2, width / 2, width * 0.4, (angle) * math.pi / 180, (angle + step) * math.pi / 180, 255, 0, 0,
                           255)
-    drawpixels.arc(self.buffer_info, width / 2, width / 2, width * 0.4, (angle) * math.pi / 180, (angle + step) * math.pi / 180, 0, 0, 255, 255)
+    pixels.arc(self.buffer_info, width / 2, width / 2, width * 0.4, (angle) * math.pi / 180, (angle + step) * math.pi / 180, 0, 0, 255, 255)
   end
 
-  drawpixels.arc(self.buffer_info, width / 2, width / 2, width * 0.4, -20 * math.pi / 180, -50 * math.pi / 180, 0, 255, 0, 255)
+  pixels.arc(self.buffer_info, width / 2, width / 2, width * 0.4, -20 * math.pi / 180, -50 * math.pi / 180, 0, 255, 0, 255)
   resource.set_texture(self.resource_path, self.header, self.buffer_info.buffer)
 end

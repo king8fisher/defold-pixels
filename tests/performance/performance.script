@@ -37,13 +37,13 @@ local function mesure_time(self, times, fun, ...)
 end  
 
 local function fill(self)
-  drawpixels.fill(self.buffer_info, 255,0,0,0)
+  pixels.fill(self.buffer_info, 255,0,0,0)
 end
 local function circle(self)
-  drawpixels.filled_circle(self.buffer_info, 222,222,400,255,0,0,255)
+  pixels.filled_circle(self.buffer_info, 222,222,400,255,0,0,255)
 end
 local function rect(self)
-  drawpixels.filled_rect(self.buffer_info, 222,222,400,255,255,0,0,255)
+  pixels.filled_rect(self.buffer_info, 222,222,400,255,255,0,0,255)
 end
 
 function update(self, dt)

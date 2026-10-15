@@ -1,11 +1,11 @@
 local M = {}
 
 local function draw_cross(buffer_info, x, y, r, g, b, a)
-    drawpixels.pixel(buffer_info, x, y, r, g, b, a)
-    drawpixels.pixel(buffer_info, x - 2, y, r, g, b, a)
-    drawpixels.pixel(buffer_info, x + 2, y, r, g, b, a)
-    drawpixels.pixel(buffer_info, x, y - 2, r, g, b, a)
-    drawpixels.pixel(buffer_info, x, y + 2, r, g, b, a)
+    pixels.pixel(buffer_info, x, y, r, g, b, a)
+    pixels.pixel(buffer_info, x - 2, y, r, g, b, a)
+    pixels.pixel(buffer_info, x + 2, y, r, g, b, a)
+    pixels.pixel(buffer_info, x, y - 2, r, g, b, a)
+    pixels.pixel(buffer_info, x, y + 2, r, g, b, a)
 end
 
 local function draw_fill_area(buffer_info, x, y)
@@ -16,13 +16,13 @@ local function draw_fill_area(buffer_info, x, y)
     local top = y + h / 2
     local bottom = y - h / 2
 
-    drawpixels.start_fill()
-    drawpixels.line(buffer_info, left, bottom, right, bottom, 0, 0, 0, 255, true, 3)
-    drawpixels.line(buffer_info, right, bottom, right, top, 0, 0, 0, 255, true, 3)
-    drawpixels.line(buffer_info, right, top, left, top, 0, 0, 0, 255, true, 3)
-    drawpixels.line(buffer_info, left, top, left, bottom, 0, 0, 0, 255, true, 3)
-    drawpixels.fill_area(buffer_info, x, y, 0, 150, 60, 255)
-    drawpixels.end_fill()
+    pixels.start_fill()
+    pixels.line(buffer_info, left, bottom, right, bottom, 0, 0, 0, 255, true, 3)
+    pixels.line(buffer_info, right, bottom, right, top, 0, 0, 0, 255, true, 3)
+    pixels.line(buffer_info, right, top, left, top, 0, 0, 0, 255, true, 3)
+    pixels.line(buffer_info, left, top, left, bottom, 0, 0, 0, 255, true, 3)
+    pixels.fill_area(buffer_info, x, y, 0, 150, 60, 255)
+    pixels.end_fill()
 end
 
 local function positions(buffer_info)
@@ -71,58 +71,58 @@ local steps = {
     function(buffer_info)
         local p = positions(buffer_info)
         local s = p.slots[2]
-        drawpixels.line(buffer_info, s.x - 40, s.y - 40, s.x + 40, s.y + 40, 0, 0, 255, 255, true, 3)
+        pixels.line(buffer_info, s.x - 40, s.y - 40, s.x + 40, s.y + 40, 0, 0, 255, 255, true, 3)
     end,
     function(buffer_info)
         local p = positions(buffer_info)
         local s = p.slots[3]
-        drawpixels.gradient_line(buffer_info, s.x - 50, s.y, s.x + 50, s.y, 255, 0, 0, 0, 0, 255, 255, true, 3)
+        pixels.gradient_line(buffer_info, s.x - 50, s.y, s.x + 50, s.y, 255, 0, 0, 0, 0, 255, 255, true, 3)
     end,
     function(buffer_info)
         local p = positions(buffer_info)
         local s = p.slots[4]
-        drawpixels.circle(buffer_info, s.x, s.y, 90, 0, 0, 0, 255)
+        pixels.circle(buffer_info, s.x, s.y, 90, 0, 0, 0, 255)
     end,
     function(buffer_info)
         local p = positions(buffer_info)
         local s = p.slots[5]
-        drawpixels.filled_circle(buffer_info, s.x, s.y, 90, 0, 160, 0, 255)
+        pixels.filled_circle(buffer_info, s.x, s.y, 90, 0, 160, 0, 255)
     end,
     function(buffer_info)
         local p = positions(buffer_info)
         local s = p.slots[6]
-        drawpixels.rect(buffer_info, s.x, s.y, 90, 60, 0, 0, 0, 255)
+        pixels.rect(buffer_info, s.x, s.y, 90, 60, 0, 0, 0, 255)
     end,
     function(buffer_info)
         local p = positions(buffer_info)
         local s = p.slots[7]
-        drawpixels.filled_rect(buffer_info, s.x, s.y, 90, 60, 200, 120, 0, 255)
+        pixels.filled_rect(buffer_info, s.x, s.y, 90, 60, 200, 120, 0, 255)
     end,
     function(buffer_info)
         local p = positions(buffer_info)
         local s = p.slots[8]
-        drawpixels.filled_rect(buffer_info, s.x, s.y, 90, 60, 0, 120, 200, 255, 25)
+        pixels.filled_rect(buffer_info, s.x, s.y, 90, 60, 0, 120, 200, 255, 25)
     end,
     function(buffer_info)
         local p = positions(buffer_info)
         local s = p.slots[9]
         local arc_start = 10 / 6 * math.pi
         local arc_finish = 5 / 2 * math.pi
-        drawpixels.arc(buffer_info, s.x, s.y, 55, arc_start, arc_finish, 0, 0, 0, 255)
+        pixels.arc(buffer_info, s.x, s.y, 55, arc_start, arc_finish, 0, 0, 0, 255)
     end,
     function(buffer_info)
         local p = positions(buffer_info)
         local s = p.slots[10]
         local arc_start = 10 / 6 * math.pi
         local arc_finish = 5 / 2 * math.pi
-        drawpixels.filled_arc(buffer_info, s.x, s.y, 55, arc_start, arc_finish, 0, 0, 255, 128)
+        pixels.filled_arc(buffer_info, s.x, s.y, 55, arc_start, arc_finish, 0, 0, 255, 128)
     end,
     function(buffer_info)
         local p = positions(buffer_info)
         local s = p.slots[11]
         local arc_start = 10 / 6 * math.pi
         local arc_finish = 5 / 2 * math.pi
-        drawpixels.gradient_arc(buffer_info, s.x, s.y, 70, arc_start, arc_finish, 255, 0, 0, 0, 0, 255, 255)
+        pixels.gradient_arc(buffer_info, s.x, s.y, 70, arc_start, arc_finish, 255, 0, 0, 0, 0, 255, 255)
     end,
     function(buffer_info)
         local p = positions(buffer_info)
@@ -134,7 +134,7 @@ local steps = {
     function(buffer_info)
         local p = positions(buffer_info)
         local s = p.slots[12]
-        drawpixels.bezier(buffer_info, s.x - 40, s.y - 30, s.x, s.y + 40, s.x + 40, s.y - 30, 120, 0, 200, 255)
+        pixels.bezier(buffer_info, s.x - 40, s.y - 30, s.x, s.y + 40, s.x + 40, s.y - 30, 120, 0, 200, 255)
     end,
 }
 
@@ -144,7 +144,7 @@ end
 
 function M.draw_step(buffer_info, index)
     if index == 1 then
-        drawpixels.fill(buffer_info, 0, 0, 0, 0)
+        pixels.fill(buffer_info, 0, 0, 0, 0)
     end
     local step = steps[index]
     if step then

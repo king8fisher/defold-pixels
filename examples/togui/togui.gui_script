@@ -14,14 +14,14 @@ function init(self)
     channels = channels
   }
 
-  drawpixels.fill(self.buffer_info, 255, 255, 0, 255)
+  pixels.fill(self.buffer_info, 255, 255, 0, 255)
 
-  drawpixels.start_fill()
-  drawpixels.line(self.buffer_info, width * 0.2, width * 0.1, width * 0.9, width * 0.9, 255, 0, 0, 255, true)
-  drawpixels.line(self.buffer_info, width * 0.3, width * 0.8, width * 0.9, width * 0.9, 255, 0, 0, 255, true)
-  drawpixels.line(self.buffer_info, width * 0.3, width * 0.8, width * 0.2, width * 0.1, 255, 0, 0, 255, true)
-  drawpixels.fill_area(self.buffer_info, width * 0.1, width * 0.5, 255, 0, 0, 255)
-  drawpixels.end_fill()
+  pixels.start_fill()
+  pixels.line(self.buffer_info, width * 0.2, width * 0.1, width * 0.9, width * 0.9, 255, 0, 0, 255, true)
+  pixels.line(self.buffer_info, width * 0.3, width * 0.8, width * 0.9, width * 0.9, 255, 0, 0, 255, true)
+  pixels.line(self.buffer_info, width * 0.3, width * 0.8, width * 0.2, width * 0.1, 255, 0, 0, 255, true)
+  pixels.fill_area(self.buffer_info, width * 0.1, width * 0.5, 255, 0, 0, 255)
+  pixels.end_fill()
   -- Fills everything around because point is not in a triangle
 
   local data = buffer.get_bytes(self.buffer_info.buffer, hash("rgba"))
