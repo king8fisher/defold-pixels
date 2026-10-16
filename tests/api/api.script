@@ -1,0 +1,231 @@
+-- Engine tests for the Lua side of pixels.polyline (argument checks, defaults,
+-- clipping and blending into each kind of buffer) and of pixels.copy_pixels
+-- (copying and merging between buffer formats). They draw into small buffers
+-- and read the pixels back with pixels.color.
+--
+-- Run them with tests/api/run.sh, or in the editor by setting
+-- bootstrap.main_collection to /tests/api/api.collection.
+-- The engine exits with code 0 when every check passes and 1 otherwise.
+
+local checks = 0
+local failures = 0
+
+local function check(ok, message)
+  checks = checks + 1
+  if not ok then
+    failures = failures + 1
+    print("FAIL " .. message)
+  end
+end
+
+local function new_canvas(width, height, channels, premultiply_alpha)
+  local info = {
+    buffer = buffer.create(width * height, {{name = hash("rgba"), type = buffer.VALUE_TYPE_UINT8, count = channels}}),
+    width = width,
+    height = height,
+    channels = channels,
+    premultiply_alpha = premultiply_alpha
+  }
+  pixels.fill(info, 0, 0, 0, 0)
+  return info
+end
+
+local function format(values)
+  return "(" .. table.concat(values, ", ") .. ")"
+end
+
+local function expect_pixel(info, x, y, expected, tolerance, label)
+  local actual = {pixels.color(info, x, y)}
+  local ok = #actual == #expected
+  for k = 1, #expected do
+    ok = ok and math.abs((actual[k] or -1000) - expected[k]) <= tolerance
+  end
+  check(ok, label .. ": pixel (" .. x .. ", " .. y .. ") is " .. format(actual) .. ", expected " .. format(expected))
+end
+
+local function max_alpha(info)
+  local result = 0
+  for y = 0, info.height - 1 do
+    for x = 0, info.width - 1 do
+      local _, _, _, a = pixels.color(info, x, y)
+      result = math.max(result, a)
+    end
+  end
+  return result
+end
+
+local function expect_error(fn, text, label)
+  local ok, err = pcall(fn)
+  check(not ok and string.find(tostring(err), text, 1, true) ~= nil,
+    label .. ": expected an error with \"" .. text .. "\", got " .. (ok and "no error" or tostring(err)))
+end
+
+local function test_argument_checks()
+  local info = new_canvas(16, 16, 4)
+  local points = {2, 8, 14, 8}
+  local function draw(p, options)
+    return function() pixels.polyline(info, p, options) end
+  end
+  expect_error(draw("points", {width = 2, color = {255, 0, 0}}), "table expected", "points not a table")
+  expect_error(draw(points, nil), "table expected", "options missing")
+  expect_error(draw(points, {color = {255, 0, 0}}), "'width' must be a number", "width missing")
+  expect_error(draw(points, {width = 2}), "'color' is required", "color missing")
+  expect_error(draw(points, {width = 2, color = "red"}), "'color' must be a table", "color not a table")
+  expect_error(draw(points, {width = 2, color = {255, 0}}), "'color' must be a table", "color too short")
+  expect_error(draw(points, {width = 2, color = {255, 0, 0, "a"}}), "'color' must be a table", "alpha not a number")
+  expect_error(draw(points, {width = 2, color = {255, 0, 0}, edge_color = {0}}), "'edge_color' must be a table",
+    "edge_color too short")
+  expect_error(draw(points, {width = 2, color = {255, 0, 0}, join = "miter"}), "'join' must be \"bevel\"", "miter join")
+  expect_error(draw(points, {width = 2, color = {255, 0, 0}, clip = {0, 0, 8}}), "'clip' must be a table",
+    "clip too short")
+  expect_error(draw(points, {width = 2, color = {255, 0, 0}, clip = true}), "'clip' must be a table", "clip not a table")
+  expect_error(draw({2, 8, 14}, {width = 2, color = {255, 0, 0}}), "'points' must hold x, y pairs", "odd point count")
+  expect_error(draw({2, 8, "14", 8, {}, 3}, {width = 2, color = {255, 0, 0}}), "'points' must contain only numbers",
+    "point not a number")
+
+  local ok, err = pcall(draw(points, {width = 2, color = {255, 0, 0}, join = "bevel"}))
+  check(ok, "bevel join rejected: " .. tostring(err))
+  -- Nothing to draw is not an error.
+  ok, err = pcall(draw({}, {width = 2, color = {255, 0, 0}}))
+  check(ok, "empty points rejected: " .. tostring(err))
+  ok, err = pcall(draw({5, 5}, {width = 2, color = {255, 0, 0}}))
+  check(ok, "single point rejected: " .. tostring(err))
+end
+
+local function test_defaults()
+  -- Without alpha the stroke is opaque; without edge_color it is solid.
+  local info = new_canvas(32, 32, 4)
+  pixels.polyline(info, {4, 16, 28, 16}, {width = 6, color = {255, 0, 0}})
+  expect_pixel(info, 16, 16, {255, 0, 0, 255}, 0, "center")
+  expect_pixel(info, 16, 18, {255, 0, 0, 255}, 0, "inside, near the edge")
+  -- The pixel on the edge is half covered.
+  expect_pixel(info, 16, 19, {255, 0, 0, 127}, 1, "edge")
+  expect_pixel(info, 16, 21, {0, 0, 0, 0}, 0, "outside")
+end
+
+local function test_gradient()
+  local info = new_canvas(32, 32, 4)
+  pixels.polyline(info, {4, 16, 28, 16}, {width = 10, color = {255, 0, 0}, edge_color = {0, 0, 255}})
+  for d = 0, 4 do
+    local t = d / 5
+    expect_pixel(info, 16, 16 + d, {255 * (1 - t), 0, 255 * t, 255}, 1, "gradient below the center")
+    expect_pixel(info, 16, 16 - d, {255 * (1 - t), 0, 255 * t, 255}, 1, "gradient above the center")
+  end
+end
+
+local function test_blending()
+  -- Straight alpha: an empty pixel takes the stroke color and alpha as is.
+  local straight = new_canvas(32, 32, 4, false)
+  pixels.polyline(straight, {4, 16, 28, 16}, {width = 6, color = {255, 255, 255, 128}})
+  expect_pixel(straight, 16, 16, {255, 255, 255, 128}, 0, "straight alpha")
+
+  -- Premultiplied alpha: the color is scaled by the alpha.
+  local premultiplied = new_canvas(32, 32, 4, true)
+  pixels.polyline(premultiplied, {4, 16, 28, 16}, {width = 6, color = {255, 255, 255, 128}})
+  expect_pixel(premultiplied, 16, 16, {128, 128, 128, 128}, 0, "premultiplied alpha")
+
+  -- A self-crossing, semi-transparent stroke is blended once per pixel.
+  for _, premultiply in ipairs({false, true}) do
+    local info = new_canvas(64, 64, 4, premultiply)
+    pixels.polyline(info, {8, 8, 56, 56, 56, 8, 8, 56, 30, 4}, {width = 8, color = {40, 90, 200, 128}})
+    local label = premultiply and "premultiplied" or "straight"
+    check(max_alpha(info) == 128, label .. ": max alpha " .. max_alpha(info) .. ", expected 128")
+  end
+end
+
+local function test_rgb_buffer()
+  -- RGB buffers blend the smooth edge with the background instead of overwriting it.
+  local info = new_canvas(32, 32, 3)
+  pixels.fill(info, 0, 0, 255)
+  pixels.polyline(info, {4, 16, 28, 16}, {width = 6, color = {255, 0, 0}})
+  expect_pixel(info, 16, 16, {255, 0, 0}, 0, "rgb center")
+  expect_pixel(info, 16, 19, {128, 0, 128}, 1, "rgb edge")
+  expect_pixel(info, 16, 21, {0, 0, 255}, 0, "rgb outside")
+end
+
+local function test_clip()
+  local options = {width = 6, color = {255, 0, 0}}
+
+  local info = new_canvas(32, 32, 4)
+  options.clip = {8, 8, 8, 8}
+  pixels.polyline(info, {-4, 12, 36, 12}, options)
+  expect_pixel(info, 8, 12, {255, 0, 0, 255}, 0, "clip, first column")
+  expect_pixel(info, 15, 12, {255, 0, 0, 255}, 0, "clip, last column")
+  expect_pixel(info, 7, 12, {0, 0, 0, 0}, 0, "left of the clip")
+  expect_pixel(info, 16, 12, {0, 0, 0, 0}, 0, "right of the clip")
+
+  -- A clip larger than the buffer is limited to the buffer.
+  info = new_canvas(32, 32, 4)
+  options.clip = {-10, -10, 100, 100}
+  pixels.polyline(info, {-4, 12, 36, 12}, options)
+  expect_pixel(info, 0, 12, {255, 0, 0, 255}, 0, "oversized clip, first column")
+  expect_pixel(info, 31, 12, {255, 0, 0, 255}, 0, "oversized clip, last column")
+
+  -- A clip outside the buffer draws nothing.
+  info = new_canvas(32, 32, 4)
+  options.clip = {40, 40, 10, 10}
+  pixels.polyline(info, {-4, 12, 36, 12}, options)
+  check(max_alpha(info) == 0, "clip outside the buffer drew pixels")
+end
+
+local function filled_canvas(channels, premultiply_alpha, r, g, b, a)
+  local info = new_canvas(4, 4, channels, premultiply_alpha)
+  pixels.fill(info, r, g, b, a)
+  return info
+end
+
+local function test_copy_pixels()
+  -- Merge: half red over half blue, both premultiplied.
+  local half_red = filled_canvas(4, true, 64, 0, 0, 128)
+  local dest = filled_canvas(4, true, 0, 0, 128, 128)
+  pixels.copy_pixels(dest, half_red, 0, 0, 2, 2, 1, 1, true)
+  expect_pixel(dest, 1, 1, {64, 0, 64, 192}, 0, "merge premultiplied, first pixel")
+  expect_pixel(dest, 2, 2, {64, 0, 64, 192}, 0, "merge premultiplied, last pixel")
+  expect_pixel(dest, 0, 0, {0, 0, 128, 128}, 0, "before the copied rectangle")
+  expect_pixel(dest, 3, 3, {0, 0, 128, 128}, 0, "after the copied rectangle")
+
+  -- Merge a premultiplied source into straight and RGB buffers.
+  dest = filled_canvas(4, false, 0, 0, 255, 255)
+  pixels.copy_pixels(dest, half_red, 0, 0, 4, 4, 0, 0, true)
+  expect_pixel(dest, 0, 0, {64, 0, 127, 255}, 1, "merge premultiplied into straight")
+  dest = filled_canvas(3, false, 0, 0, 255)
+  pixels.copy_pixels(dest, half_red, 0, 0, 4, 4, 0, 0, true)
+  expect_pixel(dest, 0, 0, {64, 0, 127}, 1, "merge premultiplied into rgb")
+
+  -- Without merge, each pixel is converted to the dest format.
+  local premultiplied = filled_canvas(4, true, 100, 50, 25, 128)
+  local straight = filled_canvas(4, false, 200, 100, 50, 128)
+  dest = filled_canvas(4, false, 1, 2, 3, 4)
+  pixels.copy_pixels(dest, premultiplied, 0, 0, 4, 4, 0, 0)
+  expect_pixel(dest, 0, 0, {199, 100, 50, 128}, 0, "copy premultiplied into straight")
+  dest = filled_canvas(4, true, 1, 2, 3, 4)
+  pixels.copy_pixels(dest, straight, 0, 0, 4, 4, 0, 0)
+  expect_pixel(dest, 0, 0, {100, 50, 25, 128}, 0, "copy straight into premultiplied")
+  dest = filled_canvas(4, true, 1, 2, 3, 4)
+  pixels.copy_pixels(dest, premultiplied, 0, 0, 4, 4, 0, 0)
+  expect_pixel(dest, 0, 0, {100, 50, 25, 128}, 0, "copy premultiplied into premultiplied")
+  dest = filled_canvas(3, false, 1, 2, 3)
+  pixels.copy_pixels(dest, premultiplied, 0, 0, 4, 4, 0, 0)
+  expect_pixel(dest, 0, 0, {199, 100, 50}, 0, "copy premultiplied into rgb")
+end
+
+function init(self)
+  test_argument_checks()
+  test_defaults()
+  test_gradient()
+  test_blending()
+  test_rgb_buffer()
+  test_clip()
+  test_copy_pixels()
+  if failures == 0 then
+    print("all " .. checks .. " api checks passed")
+  else
+    print(failures .. " of " .. checks .. " api checks failed")
+  end
+end
+
+-- Exit on the first frame, after init has finished. In tests, an exit code
+-- passed to sys.exit during init did not reach the shell.
+function update(self, dt)
+  sys.exit(failures == 0 and 0 or 1)
+end

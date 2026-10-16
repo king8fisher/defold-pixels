@@ -146,6 +146,26 @@ Draw a gradient line between two points:
 `antialiasing` - adds anti-aliasing. Only for 4 channels. Optional parameter.<br />
 `width` - indicates the line width. Only for line with anti-aliasing. Optional parameter.<br />
 
+#### pixels.polyline(buffer_info, points, options)
+Draw a polyline with bevel joins, constant width and an optional color gradient from the center line to the edges. The whole polyline is drawn as one shape: each pixel is blended once, so a semi-transparent stroke does not darken at its corners or where it crosses itself.
+
+`buffer_info` - buffer information<br />
+`points` - flat list of coordinates `{x1, y1, x2, y2, ...}`. Coordinates address pixel centers and may be fractional. Fewer than two distinct points draw nothing.<br />
+`options` - table with the fields below<br />
+`options.width` - stroke width in pixels, measured across the line<br />
+`options.color` - `{r, g, b, a}` on the center line, 0..255. Alpha is optional and defaults to 255.<br />
+`options.edge_color` - `{r, g, b, a}` at both edges. Optional; defaults to `color` for a solid stroke.<br />
+`options.join` - corner style. Optional; only `"bevel"` is supported.<br />
+`options.clip` - `{x, y, w, h}`. Optional; only pixels inside this rectangle change. Use it to redraw part of a canvas.<br />
+
+```lua
+pixels.polyline(buffer_info, {24, 40, 96, 216, 160, 64, 232, 200}, {
+  width = 16,
+  color = {250, 220, 80},
+  edge_color = {200, 40, 40},
+})
+```
+
 #### pixels.arc(buffer_info, x, y, radius, from, to, red, green, blue, alpha)
 Draw a arc between two corners. If from < to the arc is drawn counterclockwise. If from > to the arc is drawn clockwise. Only for 4 channels:
 
@@ -265,6 +285,24 @@ gui.new_texture("name", width, height, image.TYPE_RGBA, data)
 gui.set_texture(gui.get_node("box"), "name")
 gui.set_size(gui.get_node("box"), vmath.vector3(width, height, 0))
 ```
+
+## Tests
+
+Native tests cover the code that has no Defold dependencies: the polyline drawing and the pixel blend formulas. They need only a C++11 compiler:
+
+```sh
+tests/native/run.sh
+```
+
+Engine tests call the Lua API in a headless engine and read the pixels back. They build the engine with bob and the Defold build server, so they need network access. On macOS the script uses the bob inside `/Applications/Defold.app`; elsewhere, set `BOB` to the path of `bob.jar`:
+
+```sh
+BOB=/path/to/bob.jar tests/api/run.sh
+```
+
+To run the engine tests in the editor, set `bootstrap.main_collection` to `/tests/api/api.collection`. The results are printed to the console.
+
+Both suites run in CI (`.github/workflows/tests.yml`).
 
 --------
 

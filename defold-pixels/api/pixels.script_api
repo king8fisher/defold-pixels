@@ -205,6 +205,23 @@
     - name: width
       type: number
 
+  - name: polyline
+    type: function
+    desc: Draw a polyline with bevel joins, constant width and an optional color gradient
+      from the center line to the edges. The stroke is drawn as one shape, so a
+      semi-transparent stroke does not darken where its segments overlap.
+    parameters:
+    - name: buffer_info
+      type: table
+    - name: points
+      type: table
+      desc: Flat list of coordinates {x1, y1, x2, y2, ...}
+    - name: options
+      type: table
+      desc: "width (number), color ({r, g, b, a}, 0..255, alpha defaults to 255),
+        edge_color (optional, same format, defaults to color), join (optional, \"bevel\"),
+        clip (optional, {x, y, w, h}: only pixels inside this rectangle change)"
+
   - name: arc
     type: function
     desc: Draw a arc between two corners
@@ -345,7 +362,9 @@
 
   - name: copy_pixels
     type: function
-    desc: Copy a rectangular region of pixels from one buffer to another with optional alpha blending
+    desc: Copy a rectangular region of pixels from one buffer to another with optional alpha blending.
+      Pixels are converted between the buffers' formats (RGB, straight or premultiplied alpha);
+      an RGB destination keeps the straight color and drops the alpha.
     parameters:
     - name: dest_buffer
       type: table

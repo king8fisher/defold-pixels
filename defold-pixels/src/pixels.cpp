@@ -12,7 +12,11 @@
 #include <vector>
 #include <algorithm>
 #include <string>
+#include <string.h>
 #include <stack>
+
+#include "blend.h"
+#include "polyline.h"
 
 struct BufferInfo
 {
@@ -89,20 +93,6 @@ static int xytoi(int x, int y)
     return (y * buffer_info.width * buffer_info.channels) + (x * buffer_info.channels);
 }
 
-static void recordtobuffer(int i, float v)
-{
-    buffer_info.bytes[i] = v > 1 ? 255 : v * 255.0;
-}
-
-static float getmixrgb(float dc, float da, float sc, float sa, float oa)
-{
-    if (oa == 0)
-    {
-        return 0.0;
-    }
-    return (sc * sa + dc * da * (1 - sa)) / oa;
-}
-
 static void putpixel(int x, int y, int r, int g, int b, int a)
 {
     // ignore the pixel if it's outside the area of the buffer
@@ -120,26 +110,18 @@ static void putpixel(int x, int y, int r, int g, int b, int a)
     }
 }
 
-static void record_mix_pixel(int i, float r, float g, float b, float a)
+// Blends one pixel with the formula that matches how the buffer stores alpha.
+// The formulas live in blend.cpp, which has native tests.
+static void record_blend_pixel(int i, float r, float g, float b, float a)
 {
-    float ba = buffer_info.bytes[i + 3] / 255.0;
-    a = a / 255.0;
-    float oa = a + ba * (1 - a);
-    r = getmixrgb(buffer_info.bytes[i] / 255.0, ba, r / 255.0, a, oa);
-    g = getmixrgb(buffer_info.bytes[i + 1] / 255.0, ba, g / 255.0, a, oa);
-    b = getmixrgb(buffer_info.bytes[i + 2] / 255.0, ba, b / 255.0, a, oa);
-    recordtobuffer(i, r);
-    recordtobuffer(i + 1, g);
-    recordtobuffer(i + 2, b);
-    recordtobuffer(i + 3, oa);
-}
-
-static void record_premul_alpha_pixel(int i, unsigned short r, unsigned short g, unsigned short b, unsigned short a)
-{
-    buffer_info.bytes[i] = r * a >> 8;
-    buffer_info.bytes[i + 1] = g * a >> 8;
-    buffer_info.bytes[i + 2] = b * a >> 8;
-    buffer_info.bytes[i + 3] = a;
+    if (buffer_info.premultiply_alpha)
+    {
+        blend::premultiplied_over(buffer_info.bytes + i, r, g, b, a);
+    }
+    else
+    {
+        blend::straight_over(buffer_info.bytes + i, r, g, b, a);
+    }
 }
 
 static void add_point(int x, int y)
@@ -187,12 +169,8 @@ static void mixpixel(int x, int y, float r, float g, float b, float a)
     {
         return;
     }
-    if (buffer_info.premultiply_alpha && buffer_info.bytes[i + 3] == 0)
-    {
-        record_premul_alpha_pixel(i, r, g, b, a);
-    }
 
-    record_mix_pixel(i, r, g, b, a);
+    record_blend_pixel(i, r, g, b, a);
 }
 
 static void fill_mixed_line(int fromx, int tox, int y, int r, int g, int b, int a)
@@ -209,7 +187,7 @@ static void fill_mixed_line(int fromx, int tox, int y, int r, int g, int b, int 
     int end = xytoi(tox, y);
     for (int i = start; i < end; i += 4)
     {
-        record_mix_pixel(i, r, g, b, a);
+        record_blend_pixel(i, r, g, b, a);
     }
 }
 
@@ -2116,11 +2094,15 @@ static int copy_pixels_lua(lua_State* L) {
     // 5. Perform the copy operation
     uint8_t* destBytes = dest.bytes;
     uint8_t* srcBytes  = src.bytes;
-    int channels = dest.channels;   // dest channels (assume dest and src match for simplicity)
+    int channels = dest.channels;   // dest channels
     int src_channels = src.channels;
+    blend::Format dest_format = {dest.channels, dest.premultiply_alpha};
+    blend::Format src_format = {src.channels, src.premultiply_alpha};
+    // Same channels and the same alpha storage: bytes can be copied as they are.
+    bool same_format = channels == src_channels && (channels == 3 || dest.premultiply_alpha == src.premultiply_alpha);
     // If no alpha merge, copy directly
     if (!merge_alpha) {
-        if (dest.channels == src.channels) {
+        if (same_format) {
             // Optimized path: copy row by row using memcpy
             for (int y = 0; y < rect_height; ++y) {
                 uint32_t src_offset  = ((rect_y + y) * src.width  + rect_x) * src_channels;
@@ -2128,95 +2110,176 @@ static int copy_pixels_lua(lua_State* L) {
                 memcpy(&destBytes[dest_offset], &srcBytes[src_offset], rect_width * channels);
             }
         } else {
-            // Channels differ (e.g., RGB -> RGBA or vice versa)
+            // Formats differ (e.g., RGB -> RGBA, or straight -> premultiplied alpha):
+            // convert each pixel to the dest format. blend::copy_pixel has the rules.
             for (int y = 0; y < rect_height; ++y) {
                 for (int x = 0; x < rect_width; ++x) {
                     uint32_t src_index  = ((rect_y + y) * src.width  + (rect_x + x)) * src_channels;
                     uint32_t dest_index = ((dest_y + y) * dest.width + (dest_x + x)) * channels;
-                    // Copy RGB
-                    destBytes[dest_index]     = srcBytes[src_index];
-                    destBytes[dest_index + 1] = srcBytes[src_index + 1];
-                    destBytes[dest_index + 2] = srcBytes[src_index + 2];
-                    if (channels == 4) {
-                        // dest has alpha channel
-                        if (src_channels == 4) {
-                            destBytes[dest_index + 3] = srcBytes[src_index + 3];  // copy alpha from src
-                        } else {
-                            destBytes[dest_index + 3] = 255;  // no alpha in source, make fully opaque
-                        }
-                    }
-                    // if dest is RGB and src has alpha, we simply drop the alpha (or could premultiply color, but since no dest alpha, we consider dest fully opaque).
+                    blend::copy_pixel(&destBytes[dest_index], dest_format, &srcBytes[src_index], src_format);
                 }
             }
         }
     } else {
-        // merge_alpha == true, perform per-pixel alpha blending
+        // merge_alpha == true, perform per-pixel alpha blending.
+        // blend::blend_pixel handles every combination of channels and alpha storage.
         for (int y = 0; y < rect_height; ++y) {
             for (int x = 0; x < rect_width; ++x) {
                 uint32_t src_index  = ((rect_y + y) * src.width  + (rect_x + x)) * src_channels;
                 uint32_t dest_index = ((dest_y + y) * dest.width + (dest_x + x)) * channels;
-                // Read source pixel
-                uint8_t sr = srcBytes[src_index];
-                uint8_t sg = srcBytes[src_index + 1];
-                uint8_t sb = srcBytes[src_index + 2];
-                uint8_t sa = (src_channels == 4 ? srcBytes[src_index + 3] : 255);
-                if (sa == 0) {
-                    continue;  // fully transparent source pixel, skip
-                }
-                if (channels == 3) {
-                    // Dest has no alpha: blend onto an opaque background
-                    float alpha = sa / 255.0f;
-                    // Get dest pixel
-                    uint8_t dr = destBytes[dest_index];
-                    uint8_t dg = destBytes[dest_index + 1];
-                    uint8_t db = destBytes[dest_index + 2];
-                    // Blend RGB (dest alpha is implicitly 1)
-                    destBytes[dest_index]     = (uint8_t)(dr * (1 - alpha) + sr * alpha);
-                    destBytes[dest_index + 1] = (uint8_t)(dg * (1 - alpha) + sg * alpha);
-                    destBytes[dest_index + 2] = (uint8_t)(db * (1 - alpha) + sb * alpha);
-                } else {
-                    // Dest has 4 channels (RGBA)
-                    uint8_t dr = destBytes[dest_index];
-                    uint8_t dg = destBytes[dest_index + 1];
-                    uint8_t db = destBytes[dest_index + 2];
-                    uint8_t da = destBytes[dest_index + 3];
-                    if (sa == 255 || (!dest.premultiply_alpha && da == 0)) {
-                        // Opaque source or empty dest (non-premultiplied): copy directly
-                        destBytes[dest_index]     = sr;
-                        destBytes[dest_index + 1] = sg;
-                        destBytes[dest_index + 2] = sb;
-                        destBytes[dest_index + 3] = sa;
-                    } else if (dest.premultiply_alpha && da == 0) {
-                        // Dest uses premultiplied alpha and dest pixel is transparent -> just premultiply source into dest
-                        destBytes[dest_index]     = (uint8_t)((sr * sa) / 255);
-                        destBytes[dest_index + 1] = (uint8_t)((sg * sa) / 255);
-                        destBytes[dest_index + 2] = (uint8_t)((sb * sa) / 255);
-                        destBytes[dest_index + 3] = sa;
-                    } else {
-                        // General blending case
-                        float srcA = sa / 255.0f;
-                        float destA = da / 255.0f;
-                        float outA = srcA + destA * (1 - srcA);
-                        // Compute output RGB (in float [0,1])
-                        float outR = (sr/255.0f * srcA + dr/255.0f * destA * (1 - srcA));
-                        float outG = (sg/255.0f * srcA + dg/255.0f * destA * (1 - srcA));
-                        float outB = (sb/255.0f * srcA + db/255.0f * destA * (1 - srcA));
-                        if (outA > 0) {
-                            // convert premultiplied result to straight alpha (if needed)
-                            outR = outR / outA;
-                            outG = outG / outA;
-                            outB = outB / outA;
-                        }
-                        // Write back to dest (clamp to [0,255])
-                        destBytes[dest_index]     = (uint8_t) (outR * 255);
-                        destBytes[dest_index + 1] = (uint8_t) (outG * 255);
-                        destBytes[dest_index + 2] = (uint8_t) (outB * 255);
-                        destBytes[dest_index + 3] = (uint8_t) (outA * 255);
-                    }
-                }
+                blend::blend_pixel(&destBytes[dest_index], dest_format, &srcBytes[src_index], src_format);
             }
         }
     }
+
+    assert(top == lua_gettop(L));
+    return 0;
+}
+
+// Receives polyline pixels; each pixel arrives once, with coverage in `a`.
+static void plot_polyline_pixel(void *ctx, int x, int y, float r, float g, float b, float a)
+{
+    if (buffer_info.channels == 3)
+    {
+        // mixpixel overwrites RGB pixels, which would remove the smooth edges.
+        blend::rgb_over(buffer_info.bytes + xytoi(x, y), r, g, b, a);
+        if (is_record_point && a != 0)
+        {
+            add_point(x, y);
+        }
+        return;
+    }
+    mixpixel(x, y, r, g, b, a);
+}
+
+// Reads {r, g, b[, a]} from options[field]; alpha defaults to 255.
+// Returns false when the field is nil.
+static bool read_rgba_field(lua_State *L, int options, const char *field, polyline::Rgba &out)
+{
+    lua_getfield(L, options, field);
+    if (lua_isnil(L, -1))
+    {
+        lua_pop(L, 1);
+        return false;
+    }
+    if (!lua_istable(L, -1))
+    {
+        luaL_error(L, "'%s' must be a table {r, g, b, a}", field);
+    }
+    float values[4] = {0, 0, 0, 255};
+    for (int k = 0; k < 4; k++)
+    {
+        lua_rawgeti(L, -1, k + 1);
+        if (lua_isnumber(L, -1))
+        {
+            values[k] = lua_tonumber(L, -1);
+        }
+        else if (k < 3 || !lua_isnil(L, -1))
+        {
+            luaL_error(L, "'%s' must be a table {r, g, b, a}", field);
+        }
+        lua_pop(L, 1);
+    }
+    lua_pop(L, 1);
+    out.r = values[0];
+    out.g = values[1];
+    out.b = values[2];
+    out.a = values[3];
+    return true;
+}
+
+// pixels.polyline(buffer_info, points, options)
+// points: {x1, y1, x2, y2, ...}
+// options: width, color, edge_color (optional), join (optional, "bevel"),
+//          clip (optional, {x, y, w, h})
+static int draw_polyline_lua(lua_State *L)
+{
+    int top = lua_gettop(L) + 5;
+
+    read_and_validate_buffer_info(L, 1);
+    luaL_checktype(L, 2, LUA_TTABLE);
+    luaL_checktype(L, 3, LUA_TTABLE);
+
+    // Validate everything before allocating: luaL_error does not unwind C++ objects.
+    polyline::Style style;
+    lua_getfield(L, 3, "width");
+    if (!lua_isnumber(L, -1))
+    {
+        luaL_error(L, "'width' must be a number");
+    }
+    style.width = lua_tonumber(L, -1);
+    lua_pop(L, 1);
+
+    if (!read_rgba_field(L, 3, "color", style.color))
+    {
+        luaL_error(L, "'color' is required");
+    }
+    if (!read_rgba_field(L, 3, "edge_color", style.edge_color))
+    {
+        style.edge_color = style.color;
+    }
+
+    lua_getfield(L, 3, "join");
+    if (!lua_isnil(L, -1) && (!lua_isstring(L, -1) || strcmp(lua_tostring(L, -1), "bevel") != 0))
+    {
+        luaL_error(L, "'join' must be \"bevel\"");
+    }
+    lua_pop(L, 1);
+
+    polyline::Rect bounds = {0, 0, buffer_info.width, buffer_info.height};
+    lua_getfield(L, 3, "clip");
+    if (!lua_isnil(L, -1))
+    {
+        if (!lua_istable(L, -1))
+        {
+            luaL_error(L, "'clip' must be a table {x, y, w, h}");
+        }
+        int clip[4];
+        for (int k = 0; k < 4; k++)
+        {
+            lua_rawgeti(L, -1, k + 1);
+            if (!lua_isnumber(L, -1))
+            {
+                luaL_error(L, "'clip' must be a table {x, y, w, h}");
+            }
+            clip[k] = lua_tointeger(L, -1);
+            lua_pop(L, 1);
+        }
+        int x0 = std::max(0, clip[0]);
+        int y0 = std::max(0, clip[1]);
+        int x1 = std::min(buffer_info.width, clip[0] + clip[2]);
+        int y1 = std::min(buffer_info.height, clip[1] + clip[3]);
+        bounds.x = x0;
+        bounds.y = y0;
+        bounds.w = x1 - x0;
+        bounds.h = y1 - y0;
+    }
+    lua_pop(L, 1);
+
+    int count = lua_objlen(L, 2);
+    if (count % 2 != 0)
+    {
+        luaL_error(L, "'points' must hold x, y pairs");
+    }
+    for (int k = 1; k <= count; k++)
+    {
+        lua_rawgeti(L, 2, k);
+        bool is_number = lua_isnumber(L, -1);
+        lua_pop(L, 1);
+        if (!is_number)
+        {
+            luaL_error(L, "'points' must contain only numbers");
+        }
+    }
+
+    std::vector<float> xy(count);
+    for (int k = 1; k <= count; k++)
+    {
+        lua_rawgeti(L, 2, k);
+        xy[k - 1] = lua_tonumber(L, -1);
+        lua_pop(L, 1);
+    }
+    polyline::draw(xy.data(), count / 2, style, bounds, plot_polyline_pixel, 0);
 
     assert(top == lua_gettop(L));
     return 0;
@@ -2231,6 +2294,7 @@ static const luaL_reg Module_methods[] = {
         // {"triangle", draw_triangle_lua},
         {"line", draw_line_lua},
         {"gradient_line", draw_gradient_line_lua},
+        {"polyline", draw_polyline_lua},
         {"arc", draw_arc_lua},
         {"filled_arc", draw_filled_arc_lua},
         {"gradient_arc", draw_gradient_arc_lua},
