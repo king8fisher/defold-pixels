@@ -82,6 +82,13 @@ local function test_argument_checks()
   expect_error(draw({2, 8, 14}, {width = 2, color = {255, 0, 0}}), "'points' must hold x, y pairs", "odd point count")
   expect_error(draw({2, 8, "14", 8, {}, 3}, {width = 2, color = {255, 0, 0}}), "'points' must contain only numbers",
     "point not a number")
+  expect_error(draw(points, {width = "wide", color = {255, 0, 0}}), "'width' must be a number", "width not a number")
+  expect_error(draw(points, {color = {255, 0, 0}, widths = {2}}), "'widths' must hold one number per point",
+    "widths too short")
+  expect_error(draw(points, {color = {255, 0, 0}, widths = 2}), "'widths' must hold one number per point",
+    "widths not a table")
+  expect_error(draw(points, {width = 2, color = {255, 0, 0}, alphas = {1, "x"}}),
+    "'alphas' must hold one number per point", "alpha factor not a number")
 
   local ok, err = pcall(draw(points, {width = 2, color = {255, 0, 0}, join = "bevel"}))
   check(ok, "bevel join rejected: " .. tostring(err))
@@ -90,6 +97,23 @@ local function test_argument_checks()
   check(ok, "empty points rejected: " .. tostring(err))
   ok, err = pcall(draw({5, 5}, {width = 2, color = {255, 0, 0}}))
   check(ok, "single point rejected: " .. tostring(err))
+  -- widths replaces width.
+  ok, err = pcall(draw(points, {color = {255, 0, 0}, widths = {2, 4}}))
+  check(ok, "widths without width rejected: " .. tostring(err))
+end
+
+local function test_point_values()
+  -- Alpha factors scale the alpha along the stroke: 1 at the start, 0 at the end.
+  local info = new_canvas(32, 32, 4)
+  pixels.polyline(info, {4, 16, 28, 16}, {width = 6, color = {255, 0, 0}, alphas = {1, 0}})
+  expect_pixel(info, 16, 16, {255, 0, 0, 128}, 1, "alpha factor half way")
+
+  -- Widths 2 -> 10: half way the stroke is 6 wide, as in test_defaults.
+  info = new_canvas(32, 32, 4)
+  pixels.polyline(info, {4, 16, 28, 16}, {color = {255, 0, 0}, widths = {2, 10}})
+  expect_pixel(info, 16, 18, {255, 0, 0, 255}, 0, "width half way, inside")
+  expect_pixel(info, 16, 19, {255, 0, 0, 127}, 1, "width half way, edge")
+  expect_pixel(info, 16, 21, {0, 0, 0, 0}, 0, "width half way, outside")
 end
 
 local function test_defaults()
@@ -213,6 +237,7 @@ function init(self)
   test_argument_checks()
   test_defaults()
   test_gradient()
+  test_point_values()
   test_blending()
   test_rgb_buffer()
   test_clip()

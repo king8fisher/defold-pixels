@@ -201,6 +201,84 @@ static void test_gradient()
     CHECK(fabsf(f.channel(32, 37, 0) - 255) < 1, "half way out: red %.1f, expected 255", f.channel(32, 37, 0));
 }
 
+static void test_point_alphas()
+{
+    // Alpha factors 1 -> 0 along a horizontal stroke: the alpha on the center
+    // row falls linearly from 255 to 0.
+    Canvas c(64, 64);
+    polyline::Style style = solid(12, 0, 0, 0, 255);
+    const float alphas[] = {1, 0};
+    style.alphas = alphas;
+    draw(c, {8, 32, 56, 32}, style);
+    for (int x = 12; x <= 52; x += 8)
+    {
+        float expected = 255 * (1 - (x - 8) / 48.0f);
+        CHECK(fabsf(c.alpha(x, 32) - expected) < 1, "column %d: alpha %.1f, expected %.1f", x, c.alpha(x, 32),
+              expected);
+    }
+
+    // A faded stroke still plots each pixel once, through joins and crossings.
+    Canvas l(256, 256);
+    polyline::Style faded = solid(12, 40, 90, 200, 128);
+    const float loop_alphas[] = {1, 0.75f, 0.5f, 0.25f};
+    faded.alphas = loop_alphas;
+    draw(l, {40, 40, 200, 200, 200, 40, 40, 200}, faded);
+    CHECK(l.max_plots() == 1, "faded loop plotted a pixel %d times", l.max_plots());
+    CHECK(l.max_alpha() < 128.01f, "faded loop: max alpha %.2f, expected at most 128", l.max_alpha());
+}
+
+static void test_point_widths()
+{
+    // Widths 4 -> 20 along a horizontal stroke: each column covers the width
+    // interpolated at that column.
+    Canvas c(64, 64);
+    polyline::Style style = solid(0, 0, 0, 0, 255);
+    const float widths[] = {4, 20};
+    style.widths = widths;
+    draw(c, {8, 32, 56, 32}, style);
+    for (int x = 12; x <= 52; x += 8)
+    {
+        float expected = 4 + 16 * (x - 8) / 48.0f;
+        float column = 0;
+        for (int y = 0; y < 64; y++)
+        {
+            column += c.alpha(x, y) / 255.0f;
+        }
+        CHECK(fabsf(column - expected) < 0.1f, "column %d: coverage %.3f, expected %.3f", x, column, expected);
+    }
+
+    // A tapered stroke still plots each pixel once through its joins.
+    Canvas z(256, 256);
+    polyline::Style tapered = solid(0, 40, 90, 200, 128);
+    const float taper[] = {16, 12, 6, 0};
+    tapered.widths = taper;
+    draw(z, {24, 40, 96, 216, 160, 64, 232, 200}, tapered);
+    CHECK(z.max_plots() == 1, "tapered stroke plotted a pixel %d times", z.max_plots());
+    CHECK(fabsf(z.max_alpha() - 128) < 0.01f, "tapered stroke: max alpha %.2f, expected 128", z.max_alpha());
+    for (size_t i = 0; i < z.rgba.size(); i++)
+    {
+        if (z.rgba[i] != z.rgba[i])
+        {
+            CHECK(false, "tapered stroke wrote NaN at channel %zu", i);
+            break;
+        }
+    }
+
+    // Per-point values belong to the input points, so merged duplicates keep
+    // the rest aligned: the duplicate's width is dropped, not shifted along.
+    Canvas d(64, 64);
+    polyline::Style merged = solid(0, 0, 0, 0, 255);
+    const float merged_widths[] = {8, 30, 8};
+    merged.widths = merged_widths;
+    draw(d, {8, 32, 8, 32, 56, 32}, merged);
+    float column = 0;
+    for (int y = 0; y < 64; y++)
+    {
+        column += d.alpha(32, y) / 255.0f;
+    }
+    CHECK(fabsf(column - 8) < 0.1f, "merged duplicate: coverage %.3f, expected 8", column);
+}
+
 static void test_bounds()
 {
     Canvas c(100, 100);
@@ -240,13 +318,31 @@ static void test_degenerate()
 
 static void write_preview(const char *path)
 {
-    Canvas c(512, 256);
+    Canvas c(512, 320);
     polyline::Style gradient = solid(16, 0, 0, 0, 255);
     gradient.color = {250, 220, 80, 255};
     gradient.edge_color = {200, 40, 40, 255};
     draw(c, {24, 40, 96, 216, 160, 64, 232, 200}, gradient);
     draw(c, {280, 40, 360, 216, 420, 60, 490, 200}, solid(20, 40, 90, 200, 128));
     draw(c, {300, 120, 480, 120, 310, 140}, solid(10, 20, 140, 60, 160));
+
+    // A wave that thins out and fades from left to right, like a trail.
+    std::vector<float> wave, widths, alphas;
+    const int steps = 48;
+    for (int i = 0; i <= steps; i++)
+    {
+        float f = (float)i / steps;
+        wave.push_back(24 + 464 * f);
+        wave.push_back(276 + 24 * sinf(f * 4 * 3.14159265f));
+        widths.push_back(16 * (1 - f));
+        alphas.push_back(1 - f);
+    }
+    polyline::Style trail = gradient;
+    trail.color.a = 200;
+    trail.edge_color.a = 200;
+    trail.widths = widths.data();
+    trail.alphas = alphas.data();
+    draw(c, wave, trail);
 
     FILE *f = fopen(path, "wb");
     if (!f)
@@ -276,6 +372,8 @@ int main(int argc, char **argv)
     test_constant_width();
     test_bevel();
     test_gradient();
+    test_point_alphas();
+    test_point_widths();
     test_bounds();
     test_degenerate();
     if (argc > 1)

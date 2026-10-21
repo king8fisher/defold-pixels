@@ -147,12 +147,14 @@ Draw a gradient line between two points:
 `width` - indicates the line width. Only for line with anti-aliasing. Optional parameter.<br />
 
 #### pixels.polyline(buffer_info, points, options)
-Draw a polyline with bevel joins, constant width and an optional color gradient from the center line to the edges. The whole polyline is drawn as one shape: each pixel is blended once, so a semi-transparent stroke does not darken at its corners or where it crosses itself.
+Draw a polyline with bevel joins and an optional color gradient from the center line to the edges. Width and alpha can be set per point, so one stroke can taper and fade out like a trail. The whole polyline is drawn as one shape: each pixel is blended once, so a semi-transparent stroke does not darken at its corners or where it crosses itself.
 
 `buffer_info` - buffer information<br />
 `points` - flat list of coordinates `{x1, y1, x2, y2, ...}`. Coordinates address pixel centers and may be fractional. Fewer than two distinct points draw nothing.<br />
 `options` - table with the fields below<br />
-`options.width` - stroke width in pixels, measured across the line<br />
+`options.width` - stroke width in pixels, measured across the line. Optional when `widths` is given.<br />
+`options.widths` - `{w1, w2, ...}`, one stroke width per point. Optional; replaces `width`. The width changes linearly along each segment.<br />
+`options.alphas` - `{a1, a2, ...}`, one alpha factor in 0..1 per point. Optional. It scales the alpha of both colors and changes linearly along each segment.<br />
 `options.color` - `{r, g, b, a}` on the center line, 0..255. Alpha is optional and defaults to 255.<br />
 `options.edge_color` - `{r, g, b, a}` at both edges. Optional; defaults to `color` for a solid stroke.<br />
 `options.join` - corner style. Optional; only `"bevel"` is supported.<br />
@@ -163,6 +165,13 @@ pixels.polyline(buffer_info, {24, 40, 96, 216, 160, 64, 232, 200}, {
   width = 16,
   color = {250, 220, 80},
   edge_color = {200, 40, 40},
+})
+
+-- A trail that thins out and fades toward its first point.
+pixels.polyline(buffer_info, {20, 20, 120, 60, 220, 40}, {
+  widths = {2, 8, 16},
+  alphas = {0, 0.5, 1},
+  color = {250, 220, 80},
 })
 ```
 

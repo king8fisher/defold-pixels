@@ -26,6 +26,8 @@ namespace polyline
         inline float cross(Vec a, Vec b) { return a.x * b.y - a.y * b.x; }
         inline float length(Vec a) { return sqrtf(dot(a, a)); }
         inline float clamp01(float v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
+        // Position v across a stroke of half width hw; a zero width counts as its edge.
+        inline float across(float v, float hw) { return hw > 1e-6f ? v / hw : (v < 0 ? -1.0f : 1.0f); }
 
         struct Segment
         {
@@ -36,6 +38,11 @@ namespace polyline
             // Unit normal on the left of dir.
             Vec normal;
             float length;
+            // Half width and alpha factor at a and at b.
+            float hw_a;
+            float hw_b;
+            float alpha_a;
+            float alpha_b;
         };
 
         // Bevel geometry at an interior vertex.
@@ -48,6 +55,9 @@ namespace polyline
             float h;
             // +1 when the outer side of the turn is left of the path, -1 when right.
             float side;
+            // Half width and alpha factor at the vertex.
+            float hw;
+            float alpha;
         };
 
         struct Shape
@@ -55,21 +65,30 @@ namespace polyline
             std::vector<Segment> segments;
             // Indexed by vertex; only interior vertices 1 .. segments.size() - 1 are set.
             std::vector<Join> joins;
-            float half_width;
         };
 
-        void build_shape(const float *xy, int count, float half_width, Shape &shape)
+        // A path point with its own half width and alpha factor.
+        struct Vertex
         {
-            shape.half_width = half_width;
+            Vec p;
+            float hw;
+            float alpha;
+        };
 
-            std::vector<Vec> points;
+        void build_shape(const float *xy, int count, const Style &style, Shape &shape)
+        {
+            std::vector<Vertex> points;
             points.reserve(count);
             for (int i = 0; i < count; i++)
             {
-                Vec p = {xy[i * 2], xy[i * 2 + 1]};
-                if (points.empty() || length(sub(p, points.back())) >= MIN_SEGMENT_LENGTH)
+                Vertex v;
+                v.p = {xy[i * 2], xy[i * 2 + 1]};
+                v.hw = fmaxf(0.0f, (style.widths ? style.widths[i] : style.width) * 0.5f);
+                v.alpha = style.alphas ? clamp01(style.alphas[i]) : 1.0f;
+                // A merged duplicate keeps the values of the first point.
+                if (points.empty() || length(sub(v.p, points.back().p)) >= MIN_SEGMENT_LENGTH)
                 {
-                    points.push_back(p);
+                    points.push_back(v);
                 }
             }
             if (points.size() < 2)
@@ -80,12 +99,16 @@ namespace polyline
             for (size_t i = 0; i + 1 < points.size(); i++)
             {
                 Segment s;
-                s.a = points[i];
-                s.b = points[i + 1];
+                s.a = points[i].p;
+                s.b = points[i + 1].p;
                 Vec d = sub(s.b, s.a);
                 s.length = length(d);
                 s.dir = scale(d, 1.0f / s.length);
                 s.normal = {-s.dir.y, s.dir.x};
+                s.hw_a = points[i].hw;
+                s.hw_b = points[i + 1].hw;
+                s.alpha_a = points[i].alpha;
+                s.alpha_b = points[i + 1].alpha;
                 shape.segments.push_back(s);
             }
 
@@ -95,7 +118,9 @@ namespace polyline
                 const Segment &in = shape.segments[v - 1];
                 const Segment &out = shape.segments[v];
                 Join &j = shape.joins[v];
-                j.p = points[v];
+                j.p = points[v].p;
+                j.hw = points[v].hw;
+                j.alpha = points[v].alpha;
                 // A left turn has its outer side on the right.
                 j.side = cross(in.dir, out.dir) > 0 ? -1.0f : 1.0f;
                 Vec n_in = scale(in.normal, j.side);
@@ -111,25 +136,30 @@ namespace polyline
                 else
                 {
                     j.m = scale(sum, 1.0f / sum_length);
-                    j.h = half_width * dot(n_in, j.m);
+                    j.h = j.hw * dot(n_in, j.m);
                 }
             }
         }
 
         // Signed distance from q to the part of the stroke owned by segment i
         // (negative inside), and the signed position across the stroke: 0 on the
-        // center line, -1/+1 at the right/left edge.
-        void evaluate(const Shape &shape, size_t i, Vec q, float &sd, float &pos)
+        // center line, -1/+1 at the right/left edge. `alpha` is the alpha factor
+        // there.
+        void evaluate(const Shape &shape, size_t i, Vec q, float &sd, float &pos, float &alpha)
         {
             const Segment &s = shape.segments[i];
-            const float hw = shape.half_width;
             Vec d = sub(q, s.a);
             float u = dot(d, s.dir);
             float v = dot(d, s.normal);
             if (u >= 0 && u <= s.length)
             {
+                // A changing width makes the edge slightly slanted; |v| - hw is
+                // then a close stand-in for the true distance.
+                float f = u / s.length;
+                float hw = s.hw_a + (s.hw_b - s.hw_a) * f;
                 sd = fabsf(v) - hw;
-                pos = v / hw;
+                pos = across(v, hw);
+                alpha = s.alpha_a + (s.alpha_b - s.alpha_a) * f;
                 return;
             }
 
@@ -138,9 +168,11 @@ namespace polyline
             if (vertex == 0 || vertex == shape.segments.size())
             {
                 // Butt cap: the stroke ends flat at the end point.
+                float hw = before_start ? s.hw_a : s.hw_b;
                 float beyond = before_start ? -u : u - s.length;
                 sd = fmaxf(fabsf(v) - hw, beyond);
-                pos = v / hw;
+                pos = across(v, hw);
+                alpha = before_start ? s.alpha_a : s.alpha_b;
                 return;
             }
 
@@ -149,12 +181,16 @@ namespace polyline
             Vec r = sub(q, j.p);
             float dist = length(r);
             float along = dot(r, j.m);
-            sd = fmaxf(dist - hw, along - j.h);
+            sd = fmaxf(dist - j.hw, along - j.h);
             // Measure against the bevel edge instead of the half width, so the
             // bevel edge gets the same edge color as the straight segments.
-            float t = j.h > 1e-6f ? along / j.h : dist / hw;
+            float t = j.h > 1e-6f ? along / j.h : across(dist, j.hw);
             pos = j.side * clamp01(t);
+            alpha = j.alpha;
         }
+
+        // How far segment s can cover from its center line, anti-aliasing included.
+        float segment_reach(const Segment &s) { return fmaxf(s.hw_a, s.hw_b) + AA_MARGIN; }
 
         // Corners of a box that contains everything segment s can cover.
         void segment_box(const Segment &s, float reach, Vec corners[4])
@@ -213,25 +249,27 @@ namespace polyline
 
     void draw(const float *xy, int count, const Style &style, const Rect &bounds, PlotFn plot, void *ctx)
     {
-        if (count < 2 || !(style.width > 0) || bounds.w <= 0 || bounds.h <= 0)
+        if (count < 2 || (!style.widths && !(style.width > 0)) || bounds.w <= 0 || bounds.h <= 0)
         {
             return;
         }
 
         Shape shape;
-        build_shape(xy, count, style.width * 0.5f, shape);
+        build_shape(xy, count, style, shape);
         if (shape.segments.empty())
         {
             return;
         }
-        const float reach = shape.half_width + AA_MARGIN;
 
         // Mask area: the boxes of all segments, limited to bounds.
         float min_x = FLT_MAX, min_y = FLT_MAX, max_x = -FLT_MAX, max_y = -FLT_MAX;
+        float max_hw = 0;
         for (size_t i = 0; i < shape.segments.size(); i++)
         {
+            const Segment &s = shape.segments[i];
+            max_hw = fmaxf(max_hw, fmaxf(s.hw_a, s.hw_b));
             Vec corners[4];
-            segment_box(shape.segments[i], reach, corners);
+            segment_box(s, segment_reach(s), corners);
             for (int k = 0; k < 4; k++)
             {
                 min_x = fminf(min_x, corners[k].x);
@@ -239,6 +277,10 @@ namespace polyline
                 min_y = fminf(min_y, corners[k].y);
                 max_y = fmaxf(max_y, corners[k].y);
             }
+        }
+        if (!(max_hw > 0))
+        {
+            return;
         }
         int ax0, ax1, ay0, ay1;
         if (!pixel_range(min_x, max_x, bounds.x, bounds.x + bounds.w - 1, ax0, ax1) ||
@@ -250,13 +292,14 @@ namespace polyline
         const int mask_h = ay1 - ay0 + 1;
         std::vector<float> mask_sd((size_t)mask_w * mask_h, FLT_MAX);
         std::vector<float> mask_pos((size_t)mask_w * mask_h, 0.0f);
+        std::vector<float> mask_alpha((size_t)mask_w * mask_h, 1.0f);
 
         // Pass 1: combine all parts. The union of shapes keeps the smallest
         // signed distance, so overlaps are resolved before anything is drawn.
         for (size_t i = 0; i < shape.segments.size(); i++)
         {
             Vec corners[4];
-            segment_box(shape.segments[i], reach, corners);
+            segment_box(shape.segments[i], segment_reach(shape.segments[i]), corners);
             float lo_y = FLT_MAX, hi_y = -FLT_MAX;
             for (int k = 0; k < 4; k++)
             {
@@ -279,13 +322,14 @@ namespace polyline
                 size_t row = (size_t)(y - ay0) * mask_w;
                 for (int x = x0; x <= x1; x++)
                 {
-                    float sd, pos;
-                    evaluate(shape, i, {(float)x, (float)y}, sd, pos);
+                    float sd, pos, alpha;
+                    evaluate(shape, i, {(float)x, (float)y}, sd, pos, alpha);
                     size_t idx = row + (x - ax0);
                     if (sd < mask_sd[idx])
                     {
                         mask_sd[idx] = sd;
                         mask_pos[idx] = pos;
+                        mask_alpha[idx] = alpha;
                     }
                 }
             }
@@ -309,7 +353,8 @@ namespace polyline
                 // Interpolate premultiplied colors so a transparent edge color
                 // fades the stroke instead of darkening it.
                 float a = c0.a + (c1.a - c0.a) * t;
-                if (a <= 0)
+                float fade = mask_alpha[row + (x - ax0)];
+                if (a <= 0 || fade <= 0)
                 {
                     continue;
                 }
@@ -319,7 +364,7 @@ namespace polyline
                      c0.r * w0 + c1.r * w1,
                      c0.g * w0 + c1.g * w1,
                      c0.b * w0 + c1.b * w1,
-                     a * coverage);
+                     a * coverage * fade);
             }
         }
     }

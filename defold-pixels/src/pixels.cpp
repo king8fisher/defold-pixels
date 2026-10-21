@@ -2188,10 +2188,52 @@ static bool read_rgba_field(lua_State *L, int options, const char *field, polyli
     return true;
 }
 
+// Checks that options[field] is nil or a list of one number per point.
+// Returns false when the field is nil.
+static bool check_point_values(lua_State *L, int options, const char *field, int point_count)
+{
+    lua_getfield(L, options, field);
+    if (lua_isnil(L, -1))
+    {
+        lua_pop(L, 1);
+        return false;
+    }
+    if (!lua_istable(L, -1) || (int)lua_objlen(L, -1) != point_count)
+    {
+        luaL_error(L, "'%s' must hold one number per point", field);
+    }
+    for (int k = 1; k <= point_count; k++)
+    {
+        lua_rawgeti(L, -1, k);
+        bool is_number = lua_isnumber(L, -1);
+        lua_pop(L, 1);
+        if (!is_number)
+        {
+            luaL_error(L, "'%s' must hold one number per point", field);
+        }
+    }
+    lua_pop(L, 1);
+    return true;
+}
+
+// Copies options[field], already checked by check_point_values, into out.
+static void read_point_values(lua_State *L, int options, const char *field, std::vector<float> &out)
+{
+    lua_getfield(L, options, field);
+    for (size_t k = 0; k < out.size(); k++)
+    {
+        lua_rawgeti(L, -1, (int)k + 1);
+        out[k] = lua_tonumber(L, -1);
+        lua_pop(L, 1);
+    }
+    lua_pop(L, 1);
+}
+
 // pixels.polyline(buffer_info, points, options)
 // points: {x1, y1, x2, y2, ...}
-// options: width, color, edge_color (optional), join (optional, "bevel"),
-//          clip (optional, {x, y, w, h})
+// options: width (optional with widths), color, edge_color (optional),
+//          join (optional, "bevel"), clip (optional, {x, y, w, h}),
+//          widths (optional, one per point), alphas (optional, one per point)
 static int draw_polyline_lua(lua_State *L)
 {
     int top = lua_gettop(L) + 5;
@@ -2202,12 +2244,14 @@ static int draw_polyline_lua(lua_State *L)
 
     // Validate everything before allocating: luaL_error does not unwind C++ objects.
     polyline::Style style;
+    // `width` may be left out when `widths` is given; checked after the points.
     lua_getfield(L, 3, "width");
-    if (!lua_isnumber(L, -1))
+    bool has_width = !lua_isnil(L, -1);
+    if (has_width && !lua_isnumber(L, -1))
     {
         luaL_error(L, "'width' must be a number");
     }
-    style.width = lua_tonumber(L, -1);
+    style.width = has_width ? lua_tonumber(L, -1) : 0;
     lua_pop(L, 1);
 
     if (!read_rgba_field(L, 3, "color", style.color))
@@ -2271,6 +2315,13 @@ static int draw_polyline_lua(lua_State *L)
             luaL_error(L, "'points' must contain only numbers");
         }
     }
+    int point_count = count / 2;
+    bool has_widths = check_point_values(L, 3, "widths", point_count);
+    bool has_alphas = check_point_values(L, 3, "alphas", point_count);
+    if (!has_width && !has_widths)
+    {
+        luaL_error(L, "'width' must be a number");
+    }
 
     std::vector<float> xy(count);
     for (int k = 1; k <= count; k++)
@@ -2278,6 +2329,18 @@ static int draw_polyline_lua(lua_State *L)
         lua_rawgeti(L, 2, k);
         xy[k - 1] = lua_tonumber(L, -1);
         lua_pop(L, 1);
+    }
+    std::vector<float> widths(has_widths ? point_count : 0);
+    if (has_widths)
+    {
+        read_point_values(L, 3, "widths", widths);
+        style.widths = widths.data();
+    }
+    std::vector<float> alphas(has_alphas ? point_count : 0);
+    if (has_alphas)
+    {
+        read_point_values(L, 3, "alphas", alphas);
+        style.alphas = alphas.data();
     }
     polyline::draw(xy.data(), count / 2, style, bounds, plot_polyline_pixel, 0);
 

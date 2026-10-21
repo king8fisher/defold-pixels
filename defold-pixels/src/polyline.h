@@ -36,6 +36,12 @@ namespace polyline
         Rgba color;
         // Color at both edges of the stroke. Equal to `color` for a solid stroke.
         Rgba edge_color;
+        // Optional stroke width at each input point, replacing `width`. The width
+        // changes linearly along each segment; gentle tapers stay accurate.
+        const float *widths = nullptr;
+        // Optional alpha factor in 0..1 at each input point. It scales both colors'
+        // alpha and changes linearly along each segment.
+        const float *alphas = nullptr;
     };
 
     // Receives each covered pixel once. `a` already includes edge coverage.
@@ -44,6 +50,7 @@ namespace polyline
     // Draws a polyline through `count` points stored as x0, y0, x1, y1, ...
     // Point coordinates address pixel centers. Only pixels inside `bounds` are
     // emitted. Fewer than two distinct points or a non-positive width draw nothing.
+    // `style.widths` and `style.alphas`, when set, hold `count` values each.
     void draw(const float *xy, int count, const Style &style, const Rect &bounds, PlotFn plot, void *ctx);
 }
 
