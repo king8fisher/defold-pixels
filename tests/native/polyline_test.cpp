@@ -169,6 +169,88 @@ static void test_bevel()
           c.channel(60, 91, 2), c.channel(104, 96, 2));
 }
 
+static void test_miter()
+{
+    // The same right turn as test_bevel: east, then south. The miter fills the
+    // outer corner up to its tip at (110, 90).
+    Canvas c(200, 200);
+    polyline::Style style = solid(20, 0, 0, 0, 255);
+    style.color = {255, 0, 0, 255};
+    style.edge_color = {0, 0, 255, 255};
+    style.join = polyline::JOIN_MITER;
+    draw(c, {20, 100, 100, 100, 100, 180}, style);
+
+    CHECK(c.alpha(109, 91) == 255, "outer corner not covered (alpha %.1f)", c.alpha(109, 91));
+    CHECK(fabsf(c.alpha(110, 90) - 127.5f) < 1, "tip: alpha %.1f, expected 127.5", c.alpha(110, 90));
+    CHECK(c.alpha(111, 89) == 0, "beyond the tip is covered (alpha %.1f)", c.alpha(111, 89));
+    // The corner continues the edge color of both straight edges.
+    CHECK(c.channel(109, 91, 2) > 180, "miter corner is not edge colored (blue %.1f)", c.channel(109, 91, 2));
+    CHECK(c.channel(100, 100, 0) > 250, "vertex is not center colored (red %.1f)", c.channel(100, 100, 0));
+    // The miter adds the triangle between the bevel edge and the corner:
+    // (100, 90), (110, 90), (110, 100), an area of 50.
+    Canvas b(200, 200);
+    style.join = polyline::JOIN_BEVEL;
+    draw(b, {20, 100, 100, 100, 100, 180}, style);
+    CHECK(fabsf(c.area() - b.area() - 50) < 1, "miter adds %.2f pixels over the bevel, expected 50",
+          c.area() - b.area());
+
+    // A sharp turn: east, then back west-south-west. Its tip lies about 8 half
+    // widths from the vertex, so the limit decides how far the corner reaches.
+    const std::vector<float> sharp = {20, 100, 100, 100, 20, 120};
+    const float limits[] = {2, 4, 100};
+    float reach[3];
+    for (int k = 0; k < 3; k++)
+    {
+        Canvas s(200, 200);
+        polyline::Style miter = solid(10, 0, 0, 0, 255);
+        miter.join = polyline::JOIN_MITER;
+        miter.miter_limit = limits[k];
+        draw(s, sharp, miter);
+        reach[k] = 0;
+        for (int y = 0; y < 200; y++)
+        {
+            for (int x = 0; x < 200; x++)
+            {
+                reach[k] = s.alpha(x, y) > 0 && x - 100 > reach[k] ? x - 100 : reach[k];
+            }
+        }
+        CHECK(s.max_plots() == 1, "limit %.0f: a pixel was plotted %d times", limits[k], s.max_plots());
+    }
+    // The miter is cut at limit x half width along its direction, which points
+    // almost straight east here.
+    CHECK(reach[0] <= 2 * 5 + 1, "limit 2 reaches %.0f pixels, expected at most 11", reach[0]);
+    CHECK(reach[1] <= 4 * 5 + 1 && reach[1] > reach[0], "limit 4 reaches %.0f pixels, expected 11..21", reach[1]);
+    CHECK(reach[2] > 35, "unlimited miter reaches %.0f pixels, expected the tip past 35", reach[2]);
+
+    // Semi-transparent miter strokes still plot each pixel once.
+    const std::vector<std::vector<float> > shapes = {
+        {24, 40, 96, 216, 160, 64, 232, 200},
+        {20, 120, 220, 120, 30, 132},
+        {40, 40, 200, 200, 200, 40, 40, 200},
+    };
+    for (size_t i = 0; i < shapes.size(); i++)
+    {
+        Canvas o(256, 256);
+        polyline::Style miter = solid(12, 40, 90, 200, 128);
+        miter.join = polyline::JOIN_MITER;
+        draw(o, shapes[i], miter);
+        CHECK(o.max_plots() == 1, "miter shape %zu: a pixel was plotted %d times", i, o.max_plots());
+        CHECK(fabsf(o.max_alpha() - 128) < 0.01f, "miter shape %zu: max alpha %.2f, expected 128", i, o.max_alpha());
+    }
+
+    // A full reversal has no tip; the limit alone cuts it, 4 x 4 pixels past
+    // the vertex at x = 40.
+    Canvas r(64, 64);
+    polyline::Style reversal = solid(8, 0, 0, 0, 255);
+    reversal.join = polyline::JOIN_MITER;
+    draw(r, {10, 32, 40, 32, 20, 32}, reversal);
+    CHECK(r.max_plots() == 1, "miter reversal plotted a pixel %d times", r.max_plots());
+    CHECK(r.alpha(55, 32) == 255, "miter reversal: alpha %.1f inside its limit", r.alpha(55, 32));
+    CHECK(fabsf(r.alpha(56, 32) - 127.5f) < 1, "miter reversal: alpha %.1f at its limit, expected 127.5",
+          r.alpha(56, 32));
+    CHECK(r.alpha(57, 32) == 0, "miter reversal reaches past its limit");
+}
+
 static void test_gradient()
 {
     // Horizontal stroke, 20 pixels wide, centered on row 32. The color moves
@@ -371,6 +453,7 @@ int main(int argc, char **argv)
     test_semi_transparent_overlaps();
     test_constant_width();
     test_bevel();
+    test_miter();
     test_gradient();
     test_point_alphas();
     test_point_widths();

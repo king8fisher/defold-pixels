@@ -43,9 +43,12 @@ namespace polyline
             float hw_b;
             float alpha_a;
             float alpha_b;
+            // How far the segment and the joins at its ends reach from its end
+            // points, without anti-aliasing.
+            float reach;
         };
 
-        // Bevel geometry at an interior vertex.
+        // Join geometry at an interior vertex.
         struct Join
         {
             Vec p;
@@ -58,6 +61,13 @@ namespace polyline
             // Half width and alpha factor at the vertex.
             float hw;
             float alpha;
+            bool miter;
+            // Normals of the incoming and outgoing segments on the outer side.
+            Vec n_in;
+            Vec n_out;
+            // Distance from p along m where the miter ends: at its tip, or cut
+            // flat at the miter limit.
+            float limit;
         };
 
         struct Shape
@@ -109,24 +119,27 @@ namespace polyline
                 s.hw_b = points[i + 1].hw;
                 s.alpha_a = points[i].alpha;
                 s.alpha_b = points[i + 1].alpha;
+                s.reach = fmaxf(s.hw_a, s.hw_b);
                 shape.segments.push_back(s);
             }
 
             shape.joins.resize(points.size());
+            const float miter_limit = fmaxf(1.0f, style.miter_limit);
             for (size_t v = 1; v + 1 < points.size(); v++)
             {
-                const Segment &in = shape.segments[v - 1];
-                const Segment &out = shape.segments[v];
+                Segment &in = shape.segments[v - 1];
+                Segment &out = shape.segments[v];
                 Join &j = shape.joins[v];
                 j.p = points[v].p;
                 j.hw = points[v].hw;
                 j.alpha = points[v].alpha;
                 // A left turn has its outer side on the right.
                 j.side = cross(in.dir, out.dir) > 0 ? -1.0f : 1.0f;
-                Vec n_in = scale(in.normal, j.side);
-                Vec n_out = scale(out.normal, j.side);
-                Vec sum = add(n_in, n_out);
+                j.n_in = scale(in.normal, j.side);
+                j.n_out = scale(out.normal, j.side);
+                Vec sum = add(j.n_in, j.n_out);
                 float sum_length = length(sum);
+                float cos_half = 0;
                 if (sum_length < 1e-6f)
                 {
                     // The path reverses: the bevel is a flat cut through the vertex.
@@ -136,7 +149,22 @@ namespace polyline
                 else
                 {
                     j.m = scale(sum, 1.0f / sum_length);
-                    j.h = j.hw * dot(n_in, j.m);
+                    cos_half = dot(j.n_in, j.m);
+                    j.h = j.hw * cos_half;
+                }
+
+                j.miter = style.join == JOIN_MITER;
+                if (j.miter)
+                {
+                    // The tip lies hw / cos_half from the vertex. Past the limit,
+                    // and for a reversal, which has no tip, the miter is cut flat.
+                    j.limit = cos_half * miter_limit > 1 ? j.hw / cos_half : miter_limit * j.hw;
+                    in.reach = fmaxf(in.reach, j.limit);
+                    out.reach = fmaxf(out.reach, j.limit);
+                }
+                else
+                {
+                    j.limit = j.h;
                 }
             }
         }
@@ -176,11 +204,23 @@ namespace polyline
                 return;
             }
 
-            // Bevel join: the round area around the vertex, cut by the bevel edge.
             const Join &j = shape.joins[vertex];
             Vec r = sub(q, j.p);
-            float dist = length(r);
             float along = dot(r, j.m);
+            if (j.miter && along > 0)
+            {
+                // Miter join, outer side: both outer edges extended until they
+                // meet, cut flat at the limit. The inner side is covered by the
+                // segments themselves.
+                float edge = fmaxf(dot(r, j.n_in), dot(r, j.n_out));
+                sd = fmaxf(edge - j.hw, along - j.limit);
+                pos = j.side * clamp01(across(edge, j.hw));
+                alpha = j.alpha;
+                return;
+            }
+
+            // Bevel join: the round area around the vertex, cut by the bevel edge.
+            float dist = length(r);
             sd = fmaxf(dist - j.hw, along - j.h);
             // Measure against the bevel edge instead of the half width, so the
             // bevel edge gets the same edge color as the straight segments.
@@ -189,8 +229,8 @@ namespace polyline
             alpha = j.alpha;
         }
 
-        // How far segment s can cover from its center line, anti-aliasing included.
-        float segment_reach(const Segment &s) { return fmaxf(s.hw_a, s.hw_b) + AA_MARGIN; }
+        // How far segment s and its joins can cover from its center line, anti-aliasing included.
+        float segment_reach(const Segment &s) { return s.reach + AA_MARGIN; }
 
         // Corners of a box that contains everything segment s can cover.
         void segment_box(const Segment &s, float reach, Vec corners[4])

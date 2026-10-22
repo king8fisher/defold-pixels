@@ -1,7 +1,7 @@
 #ifndef DEFOLD_PIXELS_POLYLINE_H
 #define DEFOLD_PIXELS_POLYLINE_H
 
-// Polyline rasterizer with bevel joins and a color gradient across the stroke.
+// Polyline rasterizer with bevel or miter joins and a color gradient across the stroke.
 // It has no Defold dependencies so it can be compiled and tested on its own
 // (see tests/native/polyline_test.cpp).
 //
@@ -29,6 +29,14 @@ namespace polyline
         int h;
     };
 
+    enum JoinStyle
+    {
+        // The corner is cut flat between the two outer edges.
+        JOIN_BEVEL,
+        // The outer edges are extended until they meet, up to `miter_limit`.
+        JOIN_MITER,
+    };
+
     struct Style
     {
         float width;
@@ -42,6 +50,12 @@ namespace polyline
         // Optional alpha factor in 0..1 at each input point. It scales both colors'
         // alpha and changes linearly along each segment.
         const float *alphas = nullptr;
+        // Corner style at interior points.
+        JoinStyle join = JOIN_BEVEL;
+        // Longest miter, as a multiple of the half width at the corner. Longer
+        // miters are cut flat at this distance from the point (miter-clip).
+        // Values below 1 count as 1.
+        float miter_limit = 4;
     };
 
     // Receives each covered pixel once. `a` already includes edge coverage.

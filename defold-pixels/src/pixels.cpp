@@ -2232,7 +2232,8 @@ static void read_point_values(lua_State *L, int options, const char *field, std:
 // pixels.polyline(buffer_info, points, options)
 // points: {x1, y1, x2, y2, ...}
 // options: width (optional with widths), color, edge_color (optional),
-//          join (optional, "bevel"), clip (optional, {x, y, w, h}),
+//          join (optional, "bevel" or "miter"), miter_limit (optional, >= 1),
+//          clip (optional, {x, y, w, h}),
 //          widths (optional, one per point), alphas (optional, one per point)
 static int draw_polyline_lua(lua_State *L)
 {
@@ -2264,9 +2265,32 @@ static int draw_polyline_lua(lua_State *L)
     }
 
     lua_getfield(L, 3, "join");
-    if (!lua_isnil(L, -1) && (!lua_isstring(L, -1) || strcmp(lua_tostring(L, -1), "bevel") != 0))
+    if (!lua_isnil(L, -1))
     {
-        luaL_error(L, "'join' must be \"bevel\"");
+        const char *join = lua_type(L, -1) == LUA_TSTRING ? lua_tostring(L, -1) : "";
+        if (strcmp(join, "bevel") == 0)
+        {
+            style.join = polyline::JOIN_BEVEL;
+        }
+        else if (strcmp(join, "miter") == 0)
+        {
+            style.join = polyline::JOIN_MITER;
+        }
+        else
+        {
+            luaL_error(L, "'join' must be \"bevel\" or \"miter\"");
+        }
+    }
+    lua_pop(L, 1);
+
+    lua_getfield(L, 3, "miter_limit");
+    if (!lua_isnil(L, -1))
+    {
+        if (!lua_isnumber(L, -1) || !(lua_tonumber(L, -1) >= 1))
+        {
+            luaL_error(L, "'miter_limit' must be a number of at least 1");
+        }
+        style.miter_limit = lua_tonumber(L, -1);
     }
     lua_pop(L, 1);
 

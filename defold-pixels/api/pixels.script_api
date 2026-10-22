@@ -207,9 +207,10 @@
 
   - name: polyline
     type: function
-    desc: Draw a polyline with bevel joins, constant width and an optional color gradient
-      from the center line to the edges. The stroke is drawn as one shape, so a
-      semi-transparent stroke does not darken where its segments overlap.
+    desc: Draw a polyline with bevel or miter joins and an optional color gradient
+      from the center line to the edges. Width and alpha can be set per point. The
+      stroke is drawn as one shape, so a semi-transparent stroke does not darken
+      where its segments overlap.
     parameters:
     - name: buffer_info
       type: table
@@ -218,8 +219,11 @@
       desc: Flat list of coordinates {x1, y1, x2, y2, ...}
     - name: options
       type: table
-      desc: "width (number), color ({r, g, b, a}, 0..255, alpha defaults to 255),
-        edge_color (optional, same format, defaults to color), join (optional, \"bevel\"),
+      desc: "width (number, optional when widths is given), widths (optional, one width
+        per point), alphas (optional, one alpha factor in 0..1 per point), color ({r, g, b, a},
+        0..255, alpha defaults to 255), edge_color (optional, same format, defaults to color),
+        join (optional, \"bevel\" or \"miter\", defaults to \"bevel\"), miter_limit (optional,
+        longest miter as a multiple of the half width, at least 1, defaults to 4),
         clip (optional, {x, y, w, h}: only pixels inside this rectangle change)"
 
   - name: arc

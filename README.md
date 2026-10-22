@@ -147,7 +147,7 @@ Draw a gradient line between two points:
 `width` - indicates the line width. Only for line with anti-aliasing. Optional parameter.<br />
 
 #### pixels.polyline(buffer_info, points, options)
-Draw a polyline with bevel joins and an optional color gradient from the center line to the edges. Width and alpha can be set per point, so one stroke can taper and fade out like a trail. The whole polyline is drawn as one shape: each pixel is blended once, so a semi-transparent stroke does not darken at its corners or where it crosses itself.
+Draw a polyline with bevel or miter joins and an optional color gradient from the center line to the edges. Width and alpha can be set per point, so one stroke can taper and fade out like a trail. The whole polyline is drawn as one shape: each pixel is blended once, so a semi-transparent stroke does not darken at its corners or where it crosses itself.
 
 `buffer_info` - buffer information<br />
 `points` - flat list of coordinates `{x1, y1, x2, y2, ...}`. Coordinates address pixel centers and may be fractional. Fewer than two distinct points draw nothing.<br />
@@ -157,7 +157,8 @@ Draw a polyline with bevel joins and an optional color gradient from the center 
 `options.alphas` - `{a1, a2, ...}`, one alpha factor in 0..1 per point. Optional. It scales the alpha of both colors and changes linearly along each segment.<br />
 `options.color` - `{r, g, b, a}` on the center line, 0..255. Alpha is optional and defaults to 255.<br />
 `options.edge_color` - `{r, g, b, a}` at both edges. Optional; defaults to `color` for a solid stroke.<br />
-`options.join` - corner style. Optional; only `"bevel"` is supported.<br />
+`options.join` - corner style: `"bevel"` cuts each corner flat, `"miter"` extends the outer edges until they meet. Optional; defaults to `"bevel"`.<br />
+`options.miter_limit` - longest miter, as a multiple of half the stroke width at the corner, at least 1. Optional; defaults to 4. A sharper corner is cut flat at this distance from the point instead of switching to a bevel, so the corner changes smoothly as its angle changes.<br />
 `options.clip` - `{x, y, w, h}`. Optional; only pixels inside this rectangle change. Use it to redraw part of a canvas.<br />
 
 ```lua
@@ -172,6 +173,13 @@ pixels.polyline(buffer_info, {20, 20, 120, 60, 220, 40}, {
   widths = {2, 8, 16},
   alphas = {0, 0.5, 1},
   color = {250, 220, 80},
+})
+
+-- Sharp corners.
+pixels.polyline(buffer_info, {40, 40, 120, 200, 200, 40}, {
+  width = 12,
+  color = {40, 90, 200},
+  join = "miter",
 })
 ```
 

@@ -75,7 +75,14 @@ local function test_argument_checks()
   expect_error(draw(points, {width = 2, color = {255, 0, 0, "a"}}), "'color' must be a table", "alpha not a number")
   expect_error(draw(points, {width = 2, color = {255, 0, 0}, edge_color = {0}}), "'edge_color' must be a table",
     "edge_color too short")
-  expect_error(draw(points, {width = 2, color = {255, 0, 0}, join = "miter"}), "'join' must be \"bevel\"", "miter join")
+  expect_error(draw(points, {width = 2, color = {255, 0, 0}, join = "round"}), "'join' must be \"bevel\" or \"miter\"",
+    "round join")
+  expect_error(draw(points, {width = 2, color = {255, 0, 0}, join = 1}), "'join' must be \"bevel\" or \"miter\"",
+    "join not a string")
+  expect_error(draw(points, {width = 2, color = {255, 0, 0}, join = "miter", miter_limit = 0.5}),
+    "'miter_limit' must be a number of at least 1", "miter_limit below 1")
+  expect_error(draw(points, {width = 2, color = {255, 0, 0}, join = "miter", miter_limit = "long"}),
+    "'miter_limit' must be a number of at least 1", "miter_limit not a number")
   expect_error(draw(points, {width = 2, color = {255, 0, 0}, clip = {0, 0, 8}}), "'clip' must be a table",
     "clip too short")
   expect_error(draw(points, {width = 2, color = {255, 0, 0}, clip = true}), "'clip' must be a table", "clip not a table")
@@ -92,6 +99,8 @@ local function test_argument_checks()
 
   local ok, err = pcall(draw(points, {width = 2, color = {255, 0, 0}, join = "bevel"}))
   check(ok, "bevel join rejected: " .. tostring(err))
+  ok, err = pcall(draw(points, {width = 2, color = {255, 0, 0}, join = "miter", miter_limit = 1}))
+  check(ok, "miter join rejected: " .. tostring(err))
   -- Nothing to draw is not an error.
   ok, err = pcall(draw({}, {width = 2, color = {255, 0, 0}}))
   check(ok, "empty points rejected: " .. tostring(err))
@@ -114,6 +123,24 @@ local function test_point_values()
   expect_pixel(info, 16, 18, {255, 0, 0, 255}, 0, "width half way, inside")
   expect_pixel(info, 16, 19, {255, 0, 0, 127}, 1, "width half way, edge")
   expect_pixel(info, 16, 21, {0, 0, 0, 0}, 0, "width half way, outside")
+end
+
+local function test_joins()
+  -- A square turn with its outer corner at (20, 12). The miter fills the
+  -- corner; the bevel, the default, cuts it off.
+  local points = {4, 16, 16, 16, 16, 28}
+  local bevel = new_canvas(32, 32, 4)
+  pixels.polyline(bevel, points, {width = 8, color = {255, 0, 0}})
+  expect_pixel(bevel, 19, 13, {0, 0, 0, 0}, 0, "bevel corner")
+  local miter = new_canvas(32, 32, 4)
+  pixels.polyline(miter, points, {width = 8, color = {255, 0, 0}, join = "miter"})
+  expect_pixel(miter, 19, 13, {255, 0, 0, 255}, 0, "miter corner")
+  expect_pixel(miter, 21, 11, {0, 0, 0, 0}, 0, "beyond the miter tip")
+  -- A limit of 1 cuts the miter one half width (4) from the vertex. The corner
+  -- pixel's center lies 3 * sqrt(2) = 4.24 out, so only its inner quarter is covered.
+  local clipped = new_canvas(32, 32, 4)
+  pixels.polyline(clipped, points, {width = 8, color = {255, 0, 0}, join = "miter", miter_limit = 1})
+  expect_pixel(clipped, 19, 13, {255, 0, 0, 66}, 1, "clipped miter corner")
 end
 
 local function test_defaults()
@@ -238,6 +265,7 @@ function init(self)
   test_defaults()
   test_gradient()
   test_point_values()
+  test_joins()
   test_blending()
   test_rgb_buffer()
   test_clip()
