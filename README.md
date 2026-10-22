@@ -18,6 +18,15 @@ To use this library in your Defold project, add the needed version URL to your `
 
 <img width="401" alt="image" src="https://user-images.githubusercontent.com/2209596/202223571-c77f0304-5202-4314-869d-7a90bbeec5ec.png">
 
+### TypeScript
+For projects written with [defold-typescript](https://github.com/defold-typescript/toolchain), [types/pixels.d.ts](types/pixels.d.ts) declares the `pixels` module. Copy it into a folder that `tsconfig.json` includes, for example:
+
+```sh
+curl -o src/pixels.d.ts https://raw.githubusercontent.com/king8fisher/defold-pixels/master/types/pixels.d.ts
+```
+
+Then call `pixels.*` without an import. When the Lua API changes, update `types/pixels.d.ts` together with `defold-pixels/api/pixels.script_api`.
+
 
 ## Example
 ![screenshot](https://user-images.githubusercontent.com/2209596/45321616-7f24e100-b54e-11e8-9821-00b1b2e36a97.jpg)
