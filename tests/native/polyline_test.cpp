@@ -251,6 +251,62 @@ static void test_miter()
     CHECK(r.alpha(57, 32) == 0, "miter reversal reaches past its limit");
 }
 
+// Distance from (x, y) to the nearest segment of the path.
+static float distance_to_path(const std::vector<float> &xy, float x, float y)
+{
+    float best = 1e9f;
+    for (size_t k = 0; k + 3 < xy.size(); k += 2)
+    {
+        float ax = xy[k], ay = xy[k + 1], dx = xy[k + 2] - ax, dy = xy[k + 3] - ay;
+        float t = ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy);
+        t = t < 0 ? 0 : (t > 1 ? 1 : t);
+        float ex = ax + dx * t - x, ey = ay + dy * t - y;
+        best = fminf(best, sqrtf(ex * ex + ey * ey));
+    }
+    return best;
+}
+
+static void test_miter_short_segments()
+{
+    // A right turn rounded by segments much shorter than the half width, as a
+    // trail records a quick turn. Each join turns gently, so its miter tip sits
+    // barely past the half width; the corner must stay that close to the path
+    // instead of following an outer edge past a short neighbor segment.
+    const float hw = 10;
+    for (int steps = 2; steps <= 8; steps += 2)
+    {
+        std::vector<float> xy = {20, 100};
+        for (int i = 0; i <= steps; i++)
+        {
+            float a = 3.14159265f * 0.5f * i / steps;
+            xy.push_back(100 + 2 * sinf(a));
+            xy.push_back(102 - 2 * cosf(a));
+        }
+        xy.push_back(102);
+        xy.push_back(180);
+        Canvas c(200, 200);
+        polyline::Style style = solid(hw * 2, 0, 0, 0, 255);
+        style.join = polyline::JOIN_MITER;
+        draw(c, xy, style);
+        float worst = 0;
+        for (int y = 0; y < 200; y++)
+        {
+            for (int x = 0; x < 200; x++)
+            {
+                if (c.alpha(x, y) > 0)
+                {
+                    worst = fmaxf(worst, distance_to_path(xy, (float)x, (float)y));
+                }
+            }
+        }
+        // The tip of a join turning by 90 / steps degrees, plus the anti-aliasing ramp.
+        float tip = hw / cosf(3.14159265f * 0.25f / steps);
+        CHECK(worst <= tip + 1, "%d steps: covered pixel %.2f from the path, expected at most %.2f", steps, worst,
+              tip + 1);
+        CHECK(c.max_plots() == 1, "%d steps: a pixel was plotted %d times", steps, c.max_plots());
+    }
+}
+
 static void test_gradient()
 {
     // Horizontal stroke, 20 pixels wide, centered on row 32. The color moves
@@ -454,6 +510,7 @@ int main(int argc, char **argv)
     test_constant_width();
     test_bevel();
     test_miter();
+    test_miter_short_segments();
     test_gradient();
     test_point_alphas();
     test_point_widths();

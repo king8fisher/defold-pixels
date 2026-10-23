@@ -207,7 +207,12 @@ namespace polyline
             const Join &j = shape.joins[vertex];
             Vec r = sub(q, j.p);
             float along = dot(r, j.m);
-            if (j.miter && along > 0)
+            // The miter fills only the corner between the end of the incoming
+            // segment and the start of the outgoing one. Past either, the outer
+            // edges run on as straight lines that leave the stroke when a
+            // neighbor segment is short, so the bevel shape takes over there.
+            bool in_corner = dot(r, shape.segments[vertex - 1].dir) >= 0 && dot(r, shape.segments[vertex].dir) <= 0;
+            if (j.miter && along > 0 && in_corner)
             {
                 // Miter join, outer side: both outer edges extended until they
                 // meet, cut flat at the limit. The inner side is covered by the
